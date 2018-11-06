@@ -9,6 +9,8 @@ import re
 import sys
 import socket
 
+from datetime import timedelta
+
 
 max_temp = 35.0;
 max_hum = 70.0;
@@ -27,15 +29,12 @@ rootLogger.addHandler(console)
 rootLogger.setLevel(logging.INFO)
 
 people=[]
+recievers=[]
+shutdown = False
 
-try:
-	with open("/etc/smsd/privileged.list.list", mode='r') as privileged:
-		for privilege in privileged:
-			people.append(privilege.strip())
-			logging.info("Adding privilege: " + privilege)
-except Exception as tel:
-	logging.error(tel)
-	sys.exit()
+
+def setShutdown (a:bool):
+	shutdown = a
 
 #general path
 path = "/var/spool/sms"
@@ -64,7 +63,20 @@ up = "\nTemperaturüberwachung "+systemname+":\n"
 help = up + "Available commands: \nHELP - Displays all commands\nSTATUS - Displays actual status\nMUTE and UNMUTE\nINTERVAL: mins - to change the interval\n\
 Same Usage:\nMAXTEMP: degrees\nMAXHUM: percent\nMAXSMOKE: int [0; 100]\nnot case sensitive!"
 
+muteend = ""
+
 while True:
+	try:
+		with open("/etc/smsd/privileged.list", mode='r') as privileged:
+			for privilege in privileged:
+				if not privilege.startswith('#') and not privilege == "":
+					people.append(privilege.strip())
+					logging.info("Adding privilege: " + privilege)
+
+	except Exception as tel:
+		logging.error(tel)
+		sys.exit()
+
 	with open("/etc/smsd/sms.conf") as f:
 		logging.info("reading configuration from sms.conf")
 		for line in f:
@@ -73,48 +85,105 @@ while True:
 			if key == "interval":
 				interval = int(value)
 			if key == "silent":
-				silent = bool(value)
+				recievers.append(str(value.split(" ")[0]).strip())
+				recievers.append(str(value.split(" ")[1]).strip())
+				if value.split(" ")[0].strip() == "True":
+					recievers.append(str(line.split(" ")[3]).strip() + " " + str(line.split(" ")[4]).strip().split(".")[0])
+				else:
+					recievers.append("")
+
 			if key == "max_temp":
 				max_temp = value
 			if key == "max_hum":
 				max_hum = value
 			if key == "max_smoke":
 				max_rauch = value
+
+
+
+
 	try:
 		while True:
 			now = datetime.datetime.now()
 			nowf = now.strftime("%Y-%m-%d %H:%M:%S")
 			rec = (now - datetime.timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S")
-			files = os.listdir(path+"/incoming/")
-			changed= False
+			files = os.listdir(path + "/incoming/")
+			changed = False
 			try:
-				connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',db='serverraum_temperaturueberwachung',autocommit=True)
+				connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
+											 db='serverraum_temperaturueberwachung', autocommit=True)
 				cur = connection.cursor()
 				cur.execute('select ip from messsystem;')
 				systeme = cur.fetchall()
 			except Exception as e:
 				logging.error(e)
 
+			with open("/etc/smsd/sms.conf") as f:
+				recievers=[]
+				for line in f:
+					key = line.split(':')[0]
+					value = line.split(':')[1].strip()
+					if key == "interval":
+						interval = int(value)
+					if key == "silent":
+						recievers.append(str(value.split(" ")[0]).strip())
+						recievers.append(str(value.split(" ")[1]).strip())
+						if value.split(" ")[0].strip() == "True":
+							recievers.append(
+								str(line.split(" ")[3]).strip() + " " + str(line.split(" ")[4]).strip().split(".")[0])
+						else:
+							recievers.append("")
+
+					if key == "max_temp":
+						max_temp = value
+					if key == "max_hum":
+						max_hum = value
+					if key == "max_smoke":
+						max_rauch = value
+
+			a = 0
+			for i in range(int(len(recievers) / 3)):
+				if recievers[0 + 3 * i] == "True" and datetime.datetime.strptime(recievers[2 + 3 * i].split(".")[0],"%Y-%m-%d %H:%M:%S") <= now:
+					recievers[0 + 3 * i] = "False"
+					recievers[2+3*i] = ""
+					a += 1
+
+			if a > 0:
+				with open("/etc/smsd/sms.conf", mode="w") as f:
+					print("interval: " + str(interval), file=f)
+					for i in range(int(len(recievers) / 3)):
+						print(
+							"silent: " + recievers[i * 3 + 0] + " " + recievers[i * 3 + 1] + " " + recievers[i * 3 + 2],
+							file=f)
+					print("max_temp: " + str(max_temp), file=f)
+					print("max_hum: " + str(max_hum), file=f)
+					print("max_smoke: " + str(max_rauch), file=f)
+
 			for file in files:
-				privileg=False
+				privileg = False
+				number = ""
 				logging.info("new sms recieved " + file)
-				with open(path + "/incoming/" +file) as f:
+				with open(path + "/incoming/" + file) as f:
 					for line in f:
 						line = str(line)
 						if line.startswith("From:"):
 							To = "To: " + line[5:] + "\n"
+							number = line[5:].strip()
 							up = To + up
 
 							for person in people:
 								if person == line[5:].strip():
 									privileg = True
 
+						if not privileg:
+							continue
 
-						if re.match( r'status', line, re.IGNORECASE):
+						elif re.match(r'status', line, re.IGNORECASE):
 							logging.info("try connecting to db")
 							try:
-								#get average temp over the last 15 minutes
-								cur.execute("select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '"+rec+"' group by sensorPosition;")
+								# get average temp over the last 15 minutes
+								cur.execute(
+									"select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '" + rec + "' group by sensorPosition;")
 								results = cur.fetchall()
 								sms = up + "Das System ist online.\nDurschnittswerte:\n"
 								with open("/var/spool/sms/outgoing/status.txt", mode='w') as f:
@@ -130,16 +199,20 @@ while True:
 											print(result[4] + ": " + str(result[0]) + "°C\n", file=f)
 											sms = sms + result[4] + ": " + str(result[0]) + "°C\n"
 										else:
-											print(result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) +" %\n", file=f)
-											sms = sms + result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) +" %\n"
-								#writing outgoing message to messages db
+											print(result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) + " %\n",
+												  file=f)
+											sms = sms + result[4] + ": " + str(result[0]) + "°C / " + str(
+												result[1]) + " %\n"
+								# writing outgoing message to messages db
 								for system in systeme:
-									logging.info("Saving sms in: " +system[0])
-									mdb = pymysql.connect(host=system[0], user='webuser', password='La4R2uyME78hAfn9I1pH',db='messages',autocommit=True)
+									logging.info("Saving sms in: " + system[0])
+									mdb = pymysql.connect(host=system[0], user='webuser',
+														  password='La4R2uyME78hAfn9I1pH',
+														  db='messages', autocommit=True)
 									mcursor = mdb.cursor()
-									#sms is type 3 == requested info
+									# sms is type 3 == requested info
 									sql = "insert into message values ('%s', %d, '%s', '%s')" % \
-									(str(nowf),3,"status", sms)
+										  (str(nowf), 3, "status", sms)
 									mcursor.execute(sql)
 									mdb.close()
 								logging.info("status SMS sent as requested")
@@ -148,59 +221,106 @@ while True:
 								logging.error(e)
 							continue
 
-						elif not privileg:
-							continue
+						elif re.match(r'mute:', line, re.IGNORECASE):
+							logging.info("mute was requested from " + str(number))
+							mutetime = line.split(':')[1].strip()
+							days = "0"
+							hours = "0"
+							if 'd' in mutetime:
+								days = mutetime.split('d')[0].strip()
+								days = int(days[:len(days)].strip())
 
-						elif re.match( r'mute', line, re.IGNORECASE):
-							logging.info("mute was requested")
-							silent = True
+							if 'd' in mutetime and 'h' in mutetime:
+								hours = hours = mutetime.split('d')[1].strip().split('h')[0].strip()
+								hours = int(hours[:len(hours)].strip())
+
+							elif 'h' in mutetime:
+								hours = mutetime.split('h')[0].strip()
+								hours = int(hours[:len(hours)].strip())
+
+							else:
+								logging.info("incorrect mute message recieved")
+
+							muteend = now + datetime.timedelta(days=int(days), hours=int(hours))
+							for i in range(int(len(recievers) / 3)):
+								if str(recievers[i * 3 + 1]) == str(number):
+									recievers[i * 3 + 0] = "True"
+									recievers[i * 3 + 2] = str(muteend)
+							changed = True
+
+							continue
+						elif re.match(r'mute', line, re.IGNORECASE):
+							logging.info("mute was requested from " + str(number))
+							muteend = now + datetime.timedelta(days=0, hours=24)
+							for i in range(int(len(recievers) / 3)):
+								if str(recievers[i * 3 + 1]) == str(number):
+									recievers[i * 3 + 0] = "True"
+									recievers[i * 3 + 2] = str(muteend)
 							changed = True
 							continue
-						elif re.match( r'unmute', line, re.IGNORECASE):
+						elif re.match(r'unmute', line, re.IGNORECASE):
 							logging.info("unmute was requested")
-							silent = False
+							for i in range(int(len(recievers) / 3)):
+								if str(recievers[i * 3 + 1]) == str(number):
+									recievers[i * 3 + 0] = "False"
+									recievers[i * 3 + 2] = ""
 							changed = True
 							continue
-						elif re.match( r'interval:', line, re.IGNORECASE):
+						elif re.match(r'interval:', line, re.IGNORECASE):
 							interval = int(line.split(':')[1].strip())
-							logging.info("change of interval to "+str(interval)+" was requested")
+							logging.info("change of interval to " + str(interval) + " was requested")
 							changed = True
 							continue
-						elif re.match( r'maxtemp:', line, re.IGNORECASE):
+						elif re.match(r'maxtemp:', line, re.IGNORECASE):
 							max_temp = float(line.split(':')[1].strip())
-							logging.info("changing max temp to "+str(max_temp)+" was requested")
+							logging.info("changing max temp to " + str(max_temp) + " was requested")
 							changed = True
 							continue
-						elif re.match( r'maxhum:', line, re.IGNORECASE):
+						elif re.match(r'maxhum:', line, re.IGNORECASE):
 							max_hum = float(line.split(':')[1].strip())
-							logging.info("changing max hum to "+str(max_hum)+" was requested")
+							logging.info("changing max hum to " + str(max_hum) + " was requested")
 							changed = True
 							continue
-						elif re.match( r'maxsmoke:', line, re.IGNORECASE):
+						elif re.match(r'maxsmoke:', line, re.IGNORECASE):
 							max_rauch = float(line.split(':')[1].strip())
-							logging.info("changing max smoke to "+str(max_rauch)+" was requested")
+							logging.info("changing max smoke to " + str(max_rauch) + " was requested")
 							changed = True
 							continue
-						elif re.match( r'help', line, re.IGNORECASE):
+						elif re.match(r'help', line, re.IGNORECASE):
 							logging.info("help was requested")
 							logging.debug(help)
 							with open("/var/spool/sms/outgoing/help.txt", mode="w") as f:
 								print(help, file=f)
 							continue
-				os.system("rm " + path + "/incoming/" + file) 
+						'''
+                        elif re.match(r'ja',line,re.IGNORECASE) and shutdown:
+
+                            if len(line.strip().split(" ")) == 2:
+                                if line.strip().split(" ")[1].strip() == "schoeni12":
+
+                            else:
+
+
+
+                        elif re.match(r'nein',line,re.IGNORECASE) and shutdown:
+                        '''
+
+				os.system("rm " + path + "/incoming/" + file)
 			if changed:
 				if not silent:
 					silent = ""
 				with open("/etc/smsd/sms.conf", mode="w") as f:
 					print("interval: " + str(interval), file=f)
-					print("silent: " + str(silent), file=f)
-					print("max_temp: " + str(max_temp) , file=f)
-					print("max_hum: " + str(max_hum) , file=f)
-					print("max_smoke: " + str(max_rauch) , file=f)
+					for i in range(int(len(recievers) / 3)):
+						print("silent: " + str(recievers[i * 3 + 0]) + " " + str(recievers[i * 3 + 1]) + " " + str(
+							recievers[i * 3 + 2]), file=f)
+					print("max_temp: " + str(max_temp), file=f)
+					print("max_hum: " + str(max_hum), file=f)
+					print("max_smoke: " + str(max_rauch), file=f)
 				logging.info("New Configuration was saved")
 				os.system("systemctl restart smsd")
 				logging.info("smsd has successfully loaded the new configuration")
-			#wait for 15 seconds
+			# wait for 15 seconds
 			time.sleep(15)
 	except Exception as outer:
 		logging.error(outer)
