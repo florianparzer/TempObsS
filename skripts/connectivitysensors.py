@@ -16,6 +16,8 @@ from datetime import timedelta
 from datetime import datetime
 
 
+
+
 #set up logging
 logFormatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
 rootLogger = logging.getLogger()
@@ -28,12 +30,15 @@ rootLogger.setLevel(logging.INFO)
 
 logging.info("Deamon started")
 
-To = "To: " + "4367761370528" + "\n"
-#try:
-#	with open("/etc/smsd/recievers.list", mode='r') as recievers:
-#		for reciever in recievers:
-#			logging.info("Adding reciever: " + reciever)
-#			To = "To: " + reciever + "\n"
+To = ""
+try:
+	with open("/etc/smsd/recievers.list", mode='r') as recievers:
+		for reciever in recievers:
+			logging.info("Adding reciever: " + reciever)
+			To = "To: " + reciever + "\n"
+except Exception as e:
+	logging.error(e)
+	sys.exit()
 
 
 try:
@@ -69,7 +74,7 @@ while True:
                 sensorPosition = sensorPosition[0][0]
                 print(To + "\nSensor " + sensorPosition + ": keine Messungen mehr", file=f)
 
-        elif now - timedelta(minutes=10) < date and status == "offline":
+        elif now - timedelta(minutes=1) < date and status == "offline":
             logging.info("update online")
             #update db
             cur.execute('update sensor set status = \'online\' where sensorID = ' + str(result[0]))

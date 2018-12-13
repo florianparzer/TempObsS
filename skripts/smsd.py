@@ -21,13 +21,16 @@ def save_to_messages_db(cur, nowf, type, title, sms):
 		cur.execute('select ip from messsystem;')
 		systeme = cur.fetchall()
 		for system in systeme:
-			logging.info("Saving sms in: " +system[0])
-			mdb = pymysql.connect(host=system[0], user='webuser', password='La4R2uyME78hAfn9I1pH',db='messages',autocommit=True)
-			mcursor = mdb.cursor()
-			sql = "insert into message values ('%s', %d, '%s', '%s')" % (str(nowf),type,title, sms)
-			logging.debug(sql)
-			mcursor.execute(sql)
-			mdb.close()
+			try:
+				logging.info("Saving sms in: " +system[0])
+				mdb = pymysql.connect(host=system[0], user='webuser', password='La4R2uyME78hAfn9I1pH',db='messages',autocommit=True)
+				mcursor = mdb.cursor()
+				sql = "insert into message values ('%s', %d, '%s', '%s')" % (str(nowf),type,title, sms)
+				logging.debug(sql)
+				mcursor.execute(sql)
+				mdb.close()
+			except Exception as a:
+				logging.error(a)
 	except Exception as e:
 		logging.error(e)
 
@@ -82,31 +85,25 @@ while True:
 	silenced = []
 	To = ""
 	with open("/etc/smsd/sms.conf") as f:
-		logging.info("Loaded configuration:")
 		for line in f:
 			key = line.split(':')[0]
 			value = line.split(':')[1].strip()
 			if key == "interval":
 				interval = int(value)
-				logging.info("interval: " + str(interval))
 			if key == "silent":
 				if value.split(" ")[0] == "True":
 					num = value.split(" ")[1].strip();
 					silenced.append(num)
-					logging.info("muted: " + num)
 			if key == "max_temp":
 				max_temp = float(value)
-				logging.info("max_temp: " + str(max_temp))
 			if key == "max_hum":
 				max_hum = float(value)
-				logging.info("max_hum: " + str(max_hum))
 			if key == "max_smoke":
 				max_rauch = value
-				logging.info("max_smoke: " + str(max_rauch))
 
 	for i in rec:
 		if i not in silenced:
-			To = To + f"To: {i}\n"
+			To = To + "To: " + str(i) + "\n"
 
 	up = To + "\nTemperaturüberwachung " + systemname + ":\n"
 	try:
@@ -132,8 +129,7 @@ while True:
 			continue
 		cur = connection.cursor()
 		if datetime.datetime.fromtimestamp(os.stat("/home/pi/alive.txt").st_mtime) < past18:
-			cur.execute(
-				"select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '" + yes + "' group by sensorPosition;")
+			cur.execute("select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '" + yes + "' group by sensorPosition;")
 			results = cur.fetchall()
 			da = up + "Das System ist online.\nDurschnittswerte:\n"
 			with open("/var/spool/sms/outgoing/alive.txt", mode='w') as f:

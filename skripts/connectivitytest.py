@@ -30,13 +30,16 @@ gateway_read=False
 connectivity=False
 
 reciever = ""
-#try:
-#	with open("/etc/smsd/recievers.list", mode='r') as recievers:
-#		for reciever in recievers:
-#			logging.info("Adding reciever: " + reciever)
-#			To = "To: " + reciever + "\n"
+To = ""
+try:
+	with open("/etc/smsd/recievers.list", mode='r') as recievers:
+		for reciever in recievers:
+			logging.info("Adding reciever: " + reciever)
+			To = "To: " + reciever + "\n"
+except Exception as e:
+	logging.error(e)
+	sys.exit()
 
-To = "To: " + "4367761370528" + "\n"
 
 gateway_ip=""
 #gateway ip read in
