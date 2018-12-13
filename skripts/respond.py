@@ -62,7 +62,7 @@ except Exception as e:
 
 up = "Temperaturüberwachung " + systemname + ":\n"
 # text of the help message
-help = up + "\nAvailable commands: \nHELP - Displays all commands\nSTATUS - Displays actual status\nMUTE - For 24h\nMUTE: 'Anzahl der Tage'd 'Anzahl der Stunden'h - int + d für Tage und int + h für Stunden\nUNMUTE\nINTERVAL: mins - to change the interval\n\
+help = up + "\nAvailable commands: \nHELP - Displays all commands\nSTATUS - Displays actual status\nMUTE - For 24h\nMUTE: 'Anzahl der Tage'd 'Anzahl der Stunden'h\nUNMUTE\nINTERVAL: mins - to change the interval\n\
 \nMAXTEMP: degrees"
 
 muteend = ""
@@ -165,6 +165,7 @@ while True:
                 number = ""
                 logging.info("new sms recieved " + file)
                 with open(path + "/incoming/" + file) as f:
+                    To = ""
                     for line in f:
                         line = str(line)
                         if line.startswith("From:"):
@@ -290,7 +291,7 @@ while True:
                         elif re.match(r'help', line, re.IGNORECASE):
                             logging.info("help was requested")
                             logging.debug(help)
-                            with open("/var/spool/sms/outgoing1/help.txt", mode="w") as f:
+                            with open("/var/spool/sms/outgoing/help.txt", mode="w") as f:
                                 print(up + help, file=f)
                             continue
                         '''
