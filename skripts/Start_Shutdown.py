@@ -95,7 +95,7 @@ def getAllVMs(rack):
         db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
         cursor = db.cursor()
         logging.info("Connected to database")
-        cursor.execute(f'select IP_Adresse from server where fk_RackNr_int = {rack}')
+        cursor.execute(f'select IP_Adresse from server where fk_RackNr_int = {rack} and connectivity = TRUE')
         ips = cursor.fetchall()
         vms = []
         for ip in ips:
@@ -257,7 +257,7 @@ def shutdown_Rack(rack):
         db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',db='serverraum_temperaturueberwachung', autocommit=True)
         cursor = db.cursor()
         logging.info("Connected to database")
-        cursor.execute(f'select IP_Adresse from server where rackNr_int = {rack}')
+        cursor.execute(f'select IP_Adresse from server where rackNr_int = {rack} and connectivity = TRUE')
         ips = []
         for ip in cursor.fetchall():
             ips.append(ip[0])

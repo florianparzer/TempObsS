@@ -152,6 +152,8 @@ while True:
         hum = dict()
         smoke = dict()
         water = dict()
+        sensor = []
+        isNewEmergency = False
         for result in results:
             cur.execute(
                    f"select temp , feucht,  wasser , rauch, sensorName from web where zeit > '{past}' and sensorName = {result};")
