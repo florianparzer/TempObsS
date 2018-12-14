@@ -171,7 +171,7 @@ while True:
                         if line.startswith("From:"):
                             To = "To: " + line[5:] + "\n"
                             number = line[5:].strip()
-                            up = To + up
+                            header = To + up
 
                             for person in people:
                                 if person == line[5:].strip():
@@ -187,9 +187,9 @@ while True:
                                 cur.execute(
                                     "select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '" + rec + "' group by sensorPosition;")
                                 results = cur.fetchall()
-                                sms = up + "Das System ist online.\nDurschnittswerte:\n"
+                                sms = header + "Das System ist online.\nDurschnittswerte:\n"
                                 with open("/var/spool/sms/outgoing/status.txt", mode='w') as f:
-                                    print(up + "Das System ist online.\nDurschnittswerte:\n", file=f)
+                                    print(header + "Das System ist online.\nDurschnittswerte:\n", file=f)
                                     for result in results:
                                         if result[0] == None and result[1] == None and result[2] == None:
                                             print(result[4] + ": " + str(result[3]) + "\n", file=f)
@@ -292,7 +292,7 @@ while True:
                             logging.info("help was requested")
                             logging.debug(help)
                             with open("/var/spool/sms/outgoing/help.txt", mode="w") as f:
-                                print(up + help, file=f)
+                                print(header + help, file=f)
                             continue
                         '''
                         elif re.match(r'ja',line,re.IGNORECASE) and shutdown:
