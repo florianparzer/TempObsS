@@ -244,9 +244,7 @@ def shutdownServer(ip):
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'update status from server where IP_Adresse = {ip}')
-            user = cursor.fetchone()[0]
-            password = cursor.fetchone()[1]
+            cursor.execute(f'update connectivity from server where IP_Adresse = {ip}')
         except Exception as e:
             logging.error(e)
     except pxssh.ExceptionPxssh as e:

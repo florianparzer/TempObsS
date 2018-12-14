@@ -17,7 +17,7 @@ local = (([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not 
 # set up logging
 logFormatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
 rootLogger = logging.getLogger()
-fileHandler = logging.handlers.RotatingFileHandler('/var/log/smsd/failover.log', maxBytes=1000000, backupCount=5)
+fileHandler = logging.handlers.RotatingFileHandler('/var/log/smsd/escd.log', maxBytes=1000000, backupCount=5)
 fileHandler.setFormatter(logFormatter)
 console = logging.StreamHandler()
 rootLogger.addHandler(fileHandler)
@@ -137,10 +137,10 @@ while True:
         try:
             connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
                                          db='serverraum_temperaturueberwachung', autocommit=True)
+            cur = connection.cursor()
         except Exception as e:
             logging.error(e)
             continue
-        cur = connection.cursor()
 
         if not len(os.listdir(path + '/checked/')) == 0:
             continue
@@ -253,8 +253,7 @@ while True:
                 save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
                 with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
                     print(message, file=f)
-        connection.close()
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)
-        connection.close()
+    connection.close()
