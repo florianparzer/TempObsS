@@ -62,7 +62,7 @@ except Exception as e:
 
 up = "Temperaturüberwachung " + systemname + ":\n"
 # text of the help message
-help = up + "\nAvailable commands: \nHELP - Displays all commands\nSTATUS - Displays actual status\nMUTE - For 24h\nMUTE: 'Anzahl der Tage'd 'Anzahl der Stunden'h\nUNMUTE\nINTERVAL: mins - to change the interval\n\
+help = "\nAvailable commands: \nHELP - Displays all commands\nSTATUS - Displays actual status\nMUTE - For 24h\nMUTE: 'Anzahl der Tage'd 'Anzahl der Stunden'h\nUNMUTE\nINTERVAL: mins - to change the interval\n\
 \nMAXTEMP: degrees"
 
 muteend = ""
