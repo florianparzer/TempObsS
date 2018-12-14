@@ -239,14 +239,6 @@ def shutdownServer(ip):
         ssh.sendline('poweroff')
         ssh.logout()
         logging.info(f"ESXi[{ip}] heruntergefahren")
-
-        try:
-            db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
-            cursor = db.cursor()
-            logging.info("Connected to database")
-            cursor.execute(f'update connectivity from server where IP_Adresse = {ip}')
-        except Exception as e:
-            logging.error(e)
     except pxssh.ExceptionPxssh as e:
         logging.error(e)
 
