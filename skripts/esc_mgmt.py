@@ -9,6 +9,7 @@ import datetime
 from pexpect import pxssh
 import subprocess
 from smsd import save_to_messages_db
+from Start_Shutdown import shutdown_Rack
 
 # find out local ip address (we don't want to forward failed sms packets to our own system)
 local = (([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")] or [
@@ -162,6 +163,7 @@ while True:
             isTempEmergeny = True
             isHumEmergeny = True
             isSmokeEmergeny = True
+            sens = result[0]
             for vResult in valueResults:
                 try:
                     if vResult[0] == None and vResult[1] == None and vResult[2] == None:
@@ -172,7 +174,7 @@ while True:
                         continue
                     elif vResult[0] == None and vResult[1] == None:
                         if float(vResult[2]) > 0:
-                            water[result] = "Die Rauch-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(vResult[2])
+                            water[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(vResult[2])
                         else:
                             del water[vResult[4]]
                         continue
@@ -199,21 +201,21 @@ while True:
             if isSmokeEmergeny:
                 if len(smoke) == 0:
                     isNewEmergency = True
-                smoke[result] = "Die Rauch-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(val)
+                smoke[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
             if isTempEmergeny and not isHumEmergeny:
                 if len(temp) == 0:
                     isNewEmergency = True
-                temp[result] = "Die Temperatur-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(val)
+                temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
             elif not isTempEmergeny and isHumEmergeny:
                 if len(hum) == 0:
                     isNewEmergency = True
-                hum[result] = "Die Luftfeuchtigkeits-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(val)
+                hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
             else:
                 tval, hval = val
                 if len(temp) == 0 or len(hum) == 0:
                     isNewEmergency = True
-                temp[result] = "Die Temperatur-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(tval)
-                hum[result] = "Die Luftfeuchtigkeits-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(hval)
+                temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(tval)
+                hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(hval)
 
         message = up
         if len(temp) > 0 or len(hum) > 0 or len(smoke) > 0 or len(water) > 0:
@@ -266,11 +268,22 @@ while True:
         results = cur.fetchall()
         for result in results:
             cur.execute(cur.execute(
-                   f"select temp from web where zeit > '{past}' and sensorName = {result};"))
+                   f"select temp from web where zeit > '{past}' and sensorName = {result[0]};"))
             temperatures = cur.fetchall()
+            isShutdownPhase = True
             for temperature in temperatures:
                 if temperature < max_temp2:
                     isShutdownPhase = False
+                    break
+            if isShutdownPhase:
+                break
+
+        if isShutdownPhase:
+            cur.execute(f'select rackNr_int from rack where priority = (select min(priority) from rack);')
+            racks = cur.fetchall()
+            for rack in racks:
+                rack = rack[0]
+                shutdown_Rack(rack)
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)
