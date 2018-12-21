@@ -197,13 +197,21 @@ while True:
                     logging.error(e)
             sens = vResult[4]
             if isSmokeEmergeny:
+                if len(smoke) == 0:
+                    isNewEmergency = True
                 smoke[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
             if isTempEmergeny and not isHumEmergeny:
+                if len(temp) == 0:
+                    isNewEmergency = True
                 temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
             elif not isTempEmergeny and isHumEmergeny:
+                if len(hum) == 0:
+                    isNewEmergency = True
                 hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
             else:
                 tval, hval = val
+                if len(temp) == 0 or len(hum) == 0:
+                    isNewEmergency = True
                 temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(tval)
                 hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(hval)
 
@@ -242,14 +250,13 @@ while True:
             for element in normSmoke:
                 message += temp[element + '\n']
 
-        files = os.listdir(path + "/sent/")
-        if message != '':
+            files = os.listdir(path + "/sent/")
             for file in files:
-                if str(file) == 'Notfallsms.txt' and (
-                        datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > past30):
+                if str(file) == 'emergency-sms.txt' and (
+                        datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > past30) and not isNewEmergency:
                     logging.info("Notfallsms vor weniger als 30 Min gesendet")
                     message = ''
-            if message != "":
+            if message != '':
                 save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
                 with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
                     print(message, file=f)
