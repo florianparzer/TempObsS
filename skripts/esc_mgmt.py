@@ -41,8 +41,8 @@ except Exception as e:
     sys.exit()
 
 max_temp1 = 35.0
-max_temp2 = 40.0
-max_temp3 = 45.0
+max_temp2 = 45.0
+max_temp3 = 50.0
 max_hum = 70.0
 interval = 30
 max_rauch = 10
@@ -154,9 +154,10 @@ while True:
         water = dict()
         sensor = []
         isNewEmergency = False
+        isShutdownPhase = False
         for result in results:
             cur.execute(
-                   f"select temp , feucht,  wasser , rauch, sensorName from web where zeit > '{past}' and sensorName = {result};")
+                   f"select temp , feucht,  wasser , rauch from web where zeit > '{past}' and sensorName = {result};")
             valueResults = cur.fetchall()
             isTempEmergeny = True
             isHumEmergeny = True
@@ -171,7 +172,7 @@ while True:
                         continue
                     elif vResult[0] == None and vResult[1] == None:
                         if float(vResult[2]) > 0:
-                            water[vResult[4]] = "Die Rauch-Werte an Sensor " + vResult[4] + " sind außerhalb des Normalbereichs: " + str(vResult[2])
+                            water[result] = "Die Rauch-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(vResult[2])
                         else:
                             del water[vResult[4]]
                         continue
@@ -195,25 +196,24 @@ while True:
                         continue
                 except Exception as e:
                     logging.error(e)
-            sens = vResult[4]
             if isSmokeEmergeny:
                 if len(smoke) == 0:
                     isNewEmergency = True
-                smoke[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
+                smoke[result] = "Die Rauch-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(val)
             if isTempEmergeny and not isHumEmergeny:
                 if len(temp) == 0:
                     isNewEmergency = True
-                temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
+                temp[result] = "Die Temperatur-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(val)
             elif not isTempEmergeny and isHumEmergeny:
                 if len(hum) == 0:
                     isNewEmergency = True
-                hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
+                hum[result] = "Die Luftfeuchtigkeits-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(val)
             else:
                 tval, hval = val
                 if len(temp) == 0 or len(hum) == 0:
                     isNewEmergency = True
-                temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(tval)
-                hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(hval)
+                temp[result] = "Die Temperatur-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(tval)
+                hum[result] = "Die Luftfeuchtigkeits-Werte an Sensor " + result + " sind außerhalb des Normalbereichs: " + str(hval)
 
         message = up
         if len(temp) > 0 or len(hum) > 0 or len(smoke) > 0 or len(water) > 0:
@@ -260,6 +260,17 @@ while True:
                 save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
                 with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
                     print(message, file=f)
+                logging.info("Notfallsms versendet")
+
+        cur.execute("select sensorName from sensor;")
+        results = cur.fetchall()
+        for result in results:
+            cur.execute(cur.execute(
+                   f"select temp from web where zeit > '{past}' and sensorName = {result};"))
+            temperatures = cur.fetchall()
+            for temperature in temperatures:
+                if temperature < max_temp2:
+                    isShutdownPhase = False
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)
