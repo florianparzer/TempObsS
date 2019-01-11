@@ -90,16 +90,11 @@ def getVMsOfHost(ip):
     except pxssh.ExceptionPxssh as e:
         logging.error(e)
 
-def getAllVMs(rack):
+def getAllVMs(ips):
     try:
-        db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
-        cursor = db.cursor()
-        logging.info("Connected to database")
-        cursor.execute(f'select IP_Adresse from server where fk_RackNr_int = {rack} and connectivity = TRUE')
-        ips = cursor.fetchall()
         vms = []
         for ip in ips:
-            vmData = getVMsOfHost(ip[0])
+            vmData = getVMsOfHost(ip)
             for i in vmData:
                 vmIP, vmID = i
                 vms.append((vmIP, vmID, ip[0]))
@@ -120,6 +115,7 @@ def shutdownVM_SSH(vmData):
             cursor.execute(f'select benutzername, passwort, betriebssystem from VM where IP_Adresse = {vmip}')
         except Exception as e:
             logging.error(e)
+            continue
         try:
             for select in cursor.fetchall():
                 if select[2] == 'vCenter':
@@ -247,14 +243,14 @@ def shutdown_Rack(rack):
         db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',db='serverraum_temperaturueberwachung', autocommit=True)
         cursor = db.cursor()
         logging.info("Connected to database")
-        cursor.execute(f'select IP_Adresse from server where rackNr_int = {rack} and connectivity = TRUE')
+        cursor.execute(f'select IP_Adresse from server where fk_RackNr_int = {rack} and connectivity = TRUE')
         ips = []
         for ip in cursor.fetchall():
             ips.append(ip[0])
     except Exception as e:
         logging.error(e)
 
-    vmData = getAllVMs(rack)
+    vmData = getAllVMs(ips)
     vCenterID, vCenterIP, esxi = shutdownVM_SSH(vmData)
     vmTimer = 300
     vCenterTimer = 180
