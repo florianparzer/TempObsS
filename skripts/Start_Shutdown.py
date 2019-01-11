@@ -129,7 +129,7 @@ def shutdownVM_SSH(vmData):
                 if select[2] == 'Windows':
                     ssh.sendline('shutdown -s -t 0')
                     ssh.prompt()
-                elif select[2] == 'Lunix':
+                elif select[2] == 'Linux':
                     ssh.sendline('shutdown now')
                     ssh.prompt()
             ssh.logout()
