@@ -138,6 +138,13 @@ def shutdownVM_SSH(vmData):
     return (vCenterID, vCenterIP, esxi)
 
 def shutdownVM_Kill(ips, vCenterIP, type):
+    '''
+    Führt einen Kill Befehl auf den Servern mit den IP-Adressen, die in ips sind, druch
+    :param ips: die IP-Adressen der ESXi-Hosts
+    :param vCenterIP: die IP-Adresse des vCenter-Servers
+    :param type: der Type des Kill-Befehlts (soft, hard, forced)
+    :return:
+    '''
     try:
         for ip in ips:
             try:
