@@ -103,6 +103,11 @@ def getAllVMs(ips):
         logging.error(e)
 
 def shutdownVM_SSH(vmData):
+    '''
+    Schaltet alle VMs über eine SSH-Verbindung aus
+    :param vmData: Eine Liste, welche Tuples speichert in denen die IP Adresse und ID der VM und die IP Adresse des ESXi-Hosts enthalten sind
+    :return: die IP Adresse und ID des vCenter Servers und die IP Adresse des ESXi, auf dem der vCenter Server ist
+    '''
     for data in vmData:
         vmip, id, hIP = data
         vCenterID = None
