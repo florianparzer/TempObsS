@@ -49,13 +49,60 @@ def shutdownVCenter(id, ip, user, passw, ssh):
     time.sleep(100)
 
 
-def getVMsOfHost(ip):
+def getIpOfVMsOnHost(ip):
     try:
         try:
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = {ip}')
+            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}"')
+            credentials = cursor.fetchone()
+            db.close()
+        except Exception as e:
+            logging.error(e)
+
+        ssh = pxssh.pxssh()
+        ssh.login(ip, credentials[0], credentials[1])
+        logging.info(f"Mit ESXi-Server[{ip}] verbunden")
+        ssh.sendline('vim-cmd vmsvc/getallvms | grep -v Vmid')
+        ssh.prompt()
+        output = ssh.before.decode("UTF-8").split('\n')
+        count = 0
+        vmIDs = []
+
+        # Get VMIDs of running VMs
+        for line in output:
+            if count < 1:
+                count += 1
+                continue
+            id = line.split(' ')[0]
+            if id != '':
+                vmIDs.append(id)
+
+        # Get IPs of running VMs
+        for id in vmIDs:
+            ssh.sendline(f'vim-cmd vmsvc/get.guest {id} | grep -i ipaddress')
+            ssh.prompt()
+            output = ssh.before.decode("UTF-8").split('\n')
+            for line in output:
+                line = line.strip()
+                if line.startswith("ipAddress"):
+                    if '<unset>' in line:
+                        break
+                    vmIP = line.split('"')[1]
+                    yield vmIP
+                    break
+        ssh.logout()
+    except pxssh.ExceptionPxssh as e:
+        logging.error(e)
+
+def getVMWorldIDs(ip):
+    try:
+        try:
+            db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
+            cursor = db.cursor()
+            logging.info("Connected to database")
+            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}"')
             credentials = cursor.fetchone()
             db.close()
         except Exception as e:
@@ -66,27 +113,17 @@ def getVMsOfHost(ip):
         logging.info(f"Mit ESXi-Server[{ip}] verbunden")
         ssh.sendline('esxcli network vm list')
         ssh.prompt()
-        output = ssh.before.split('\n')
+        output = ssh.before.decode("UTF-8").split('\n')
         count = 0
         vmIDs = []
 
         # Get VMIDs of running VMs
         for line in output:
-            if count < 3:
+            if count < 3 or line == '':
                 count += 1
                 continue
-            vmIDs.append(line.strip().split(" ")[0])
-
-        # Get IPs of running VMs
-        for id in vmIDs:
-            ssh.sendline(f'esxcli network vm port list -w {id}')
-            ssh.prompt()
-            output = ssh.before.split('\n')
-            for line in output:
-                line = line.strip()
-                if line.startswith("IP Address"):
-                    vmIP = line.split(": ")
-                    yield (vmIP[1], id)
+            yield line.strip().split(" ")[0]
+        ssh.logout()
     except pxssh.ExceptionPxssh as e:
         logging.error(e)
 
@@ -94,10 +131,9 @@ def getAllVMs(ips):
     try:
         vms = []
         for ip in ips:
-            vmData = getVMsOfHost(ip)
+            vmData = getIpOfVMsOnHost(ip)
             for i in vmData:
-                vmIP, vmID = i
-                vms.append((vmIP, vmID, ip[0]))
+                vms.append(i)
         return vms
     except Exception as e:
         logging.error(e)
@@ -117,7 +153,7 @@ def shutdownVM_SSH(vmData):
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'select benutzername, passwort, betriebssystem from VM where IP_Adresse = {vmip}')
+            cursor.execute(f'select benutzername, passwort, betriebssystem from VM where pk_IP_Adresse = "{vmip}"')
         except Exception as e:
             logging.error(e)
             continue
@@ -129,12 +165,18 @@ def shutdownVM_SSH(vmData):
                     esxi = hIP
                     continue
                 ssh = pxssh.pxssh()
-                ssh.login(vmip, select[0], select[1])
-                logging.info(f"Mit VM[{vmip}] verbunden")
                 if select[2] == 'Windows':
+                    ssh.PROMPT = '.+>'
+                    ssh.login(vmip, select[0], select[1], auto_prompt_reset=False)
+                    logging.info(f"Mit VM[{vmip}] verbunden")
+                    ssh.prompt()
                     ssh.sendline('shutdown -s -t 0')
                     ssh.prompt()
                 elif select[2] == 'Linux':
+                    ssh.PROMPT = '\\[.+\\]#'
+                    ssh.login(vmip, select[0], select[1], auto_prompt_reset=False)
+                    logging.info(f"Mit VM[{vmip}] verbunden")
+                    ssh.prompt()
                     ssh.sendline('shutdown now')
                     ssh.prompt()
             ssh.logout()
