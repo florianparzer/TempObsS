@@ -30,25 +30,7 @@ def startServer(ip, user, password):
     except Exception as e:
         logging.error(e)
 
-
-def shutdownVCenter(id, ip, user, passw, ssh):
-    try:
-        vmSsh = pxssh.pxssh();
-        vmSsh.login(ip, user, passw)
-        vmSsh.sendline("shutdown now")
-        vmSsh.prompt()
-        vmSsh.logout()
-    except pxssh.ExceptionPxssh as e:
-        logging.error(e)
-    ssh.sendline(f"esxcli vm process kill --type soft --world-id= {id}")
-    time.sleep(100)
-    ssh.sendline(f"esxcli vm process kill --type hard --world-id= {id}")
-    time.sleep(100)
-    ssh.sendline(f"esxcli vm process kill --type force --world-id= {id}")
-    ssh.prompt()
-    time.sleep(100)
-
-
+"""
 def getIpOfVMsOnHost(ip):
     try:
         try:
@@ -95,8 +77,13 @@ def getIpOfVMsOnHost(ip):
         ssh.logout()
     except pxssh.ExceptionPxssh as e:
         logging.error(e)
-
+"""
 def getVMWorldIDs(ip):
+    """
+    Liefert die WorldIDs der auf einem ESXi Host laufenden VMs
+    :param ip: die IP Adresse des ESXi Hosts
+    :return: eine Liste mit allen WorldIDs
+    """
     try:
         try:
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
@@ -122,33 +109,78 @@ def getVMWorldIDs(ip):
             if count < 3 or line == '':
                 count += 1
                 continue
-            yield line.strip().split(" ")[0]
+            vmIDs.append(line.strip().split(" ")[0])
         ssh.logout()
+        return vmIDs
+    except pxssh.ExceptionPxssh as e:
+        logging.error(e)
+
+def getVMsOfHost(ip):
+    """
+    Liefert von einem ESXi Host die IP Adressen und WorldIDs der VMs
+    :param ip: die IP Adresse des ESXi Hosts
+    :return: ein Dictionary mit den IP Adressen als Key und den WorldIDs als Value
+    """
+    vmIDs = getVMWorldIDs(ip)
+    try:
+        try:
+            db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
+            cursor = db.cursor()
+            logging.info("Connected to database")
+            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}"')
+            credentials = cursor.fetchone()
+            db.close()
+        except Exception as e:
+            logging.error(e)
+
+        vmData = dict
+        ssh = pxssh.pxssh()
+        ssh.login(ip, credentials[0], credentials[1])
+        ssh.prompt()
+        logging.info(f"Mit ESXi-Server[{ip}] verbunden")
+        # Get IPs of running VMs
+        for id in vmIDs:
+            ssh.sendline(f'esxcli network vm port list -w {id} | grep -i "IP Address"')
+            ssh.prompt()
+            output = ssh.before.decode("UTF-8").split('\n')
+            for line in output:
+                line = line.strip()
+                if line.startswith("IP Address"):
+                    vmData[line.split(':')[1].strip()] = id
+                    break
+        ssh.logout()
+        return vmData
     except pxssh.ExceptionPxssh as e:
         logging.error(e)
 
 def getAllVMs(ips):
+    """
+    Liefert von mehreren ESXi Hosts die IP Adressen und WorldIDs der VMs
+    :param ips: eine Liste mit IP Adressen der ESXi Hosts
+    :return: ein Dictionary mit den IP Adressen als Key und den WorldIDs als Value
+    """
     try:
-        vms = []
+        vms = dict
         for ip in ips:
-            vmData = getIpOfVMsOnHost(ip)
+            vmData = getVMsOfHost(ip)
             for i in vmData:
-                vms.append(i)
+                id = vmData[i]
+                vms[i] = (id, ip)
         return vms
     except Exception as e:
-        logging.error(e)
 
+        logging.error(e)
 def shutdownVM_SSH(vmData):
     '''
     Schaltet alle VMs über eine SSH-Verbindung aus
     :param vmData: Eine Liste, welche Tuples speichert in denen die IP Adresse und ID der VM und die IP Adresse des ESXi-Hosts enthalten sind
     :return: die IP Adresse und ID des vCenter Servers und die IP Adresse des ESXi, auf dem der vCenter Server ist
     '''
-    for data in vmData:
-        vmip, id, hIP = data
-        vCenterID = None
-        vCenterIP = None
-        esxi = None
+    vCenterID = None
+    vCenterIP = None
+    esxi = None
+    for vmip in vmData:
+        id, hostIP = vmData[vmip]
         try:
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
@@ -162,7 +194,7 @@ def shutdownVM_SSH(vmData):
                 if select[2] == 'vCenter':
                     vCenterID = id
                     vCenterIP = vmip
-                    esxi = hIP
+                    esxi = hostIP
                     continue
                 ssh = pxssh.pxssh()
                 if select[2] == 'Windows':
@@ -184,13 +216,13 @@ def shutdownVM_SSH(vmData):
             logging.error(e)
     return (vCenterID, vCenterIP, esxi)
 
+
 def shutdownVM_Kill(ips, vCenterIP, type):
     '''
     Führt einen Kill Befehl auf den Servern mit den IP-Adressen, die in ips sind, druch
     :param ips: die IP-Adressen der ESXi-Hosts
     :param vCenterIP: die IP-Adresse des vCenter-Servers
     :param type: der Type des Kill-Befehlts (soft, hard, forced)
-    :return:
     '''
     try:
         for ip in ips:
@@ -207,8 +239,9 @@ def shutdownVM_Kill(ips, vCenterIP, type):
             ssh = pxssh.pxssh()
             ssh.login(ip, user, password)
             logging.info(f"Mit ESXi[{ip}] verbunden")
-            for data in getVMsOfHost(ip):
-                vmip, id = data
+            vmData = getVMsOfHost(ip)
+            for vmip in vmData:
+                id = vmData[vmip]
                 if vmip == vCenterIP:
                     continue
                 ssh.sendline(f"esxcli vm process kill --type {type} --world-id= {id}")
@@ -219,6 +252,10 @@ def shutdownVM_Kill(ips, vCenterIP, type):
 
 
 def shutdownvCenter_SSH(ip):
+    """
+    Fährt den vCenter Server über eine SSH-Verbindung herunter
+    :param ip: die IP Adresse des vCenter Servers
+    """
     try:
         db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
                              db='serverraum_temperaturueberwachung', autocommit=True)
@@ -241,6 +278,12 @@ def shutdownvCenter_SSH(ip):
         logging.error(e)
 
 def shutdownvCenter_Kill(ip, vCenterID, type):
+    """
+    Führt einen Kill Befehl druch, um den vCenter Server herunterzufahren
+    :param ip: die IP Adresse des ESXi Hosts, auf dem der vCenter Server läuft
+    :param vCenterID: die WorldID des vCenter Servers
+    :param type: der Type des Kill-Befehlts (soft, hard, forced)
+    """
     try:
         try:
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
@@ -272,6 +315,10 @@ def shutdownvCenter_Kill(ip, vCenterID, type):
         logging.error(e)
 
 def shutdownServer(ip):
+    """
+    Fährt einen ESXi Host herunter
+    :param ip: die IP Adresse des ESXi Hosts
+    """
     try:
         try:
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
@@ -293,6 +340,10 @@ def shutdownServer(ip):
         logging.error(e)
 
 def shutdown_Rack(rack):
+    """
+    Fährt alle Geräte des Serverracks inklusive der VMs sicher herunter
+    :param rack: die Rack ID des Serverracks
+    """
     try:
         db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',db='serverraum_temperaturueberwachung', autocommit=True)
         cursor = db.cursor()
