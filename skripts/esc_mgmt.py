@@ -63,6 +63,12 @@ except Exception as e:
     sys.exit()
 
 isEmergency = False
+isShutdownPhase = False
+
+tempSens = []
+smokeSens = []
+waterSens = []
+humSens = []
 
 while True:
     silenced = []
@@ -135,9 +141,12 @@ while True:
         hum = dict()
         smoke = dict()
         water = dict()
-        sensor = []
+        isTempEmergency = True
+        isSmokeEmergency = True
+        isWaterEmergency = True
+        isHumEmergency = True
         isNewEmergency = False
-        isShutdownPhase = False
+
         for result in results:
             try:
                 sens = result[0]
@@ -152,49 +161,15 @@ while True:
                 dataHum = []
                 for vResult in valueResults:
                     if vResult[0] == None and vResult[1] == None and vResult[2] == None:
-                        """
-                        if float(vResult[3]) < max_rauch:
-                            isSmokeEmergeny = False
-                        else:
-                            val = vResult[3]
-                        continue
-                        """
                         data.append(vResult[3])
                         isSmoke = True
                     elif vResult[0] == None and vResult[1] == None:
-                        """
-                        if float(vResult[2]) > 0:
-                            water[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(vResult[2])
-                        else:
-                            del water[vResult[4]]
-                        continue
-                        """
                         data.append(vResult[2])
                         isWater = True
                     elif vResult[1] == None:
-                        """
-                        if float(vResult[0]) < max_temp_sms:
-                            isTempEmergeny = False
-                        else:
-                            val = vResult[3]
-                        continue
-                        """
                         data.append(vResult[0])
                         isTemp = True
                     else:
-                        """
-                        if float(vResult[0]) < max_temp_sms:
-                            isTempEmergeny = False
-                        if float(vResult[1]) < max_hum:
-                            isHumEmergeny = False
-                        if isTempEmergeny and not isHumEmergeny:
-                            val = vResult[0]
-                        elif not isTempEmergeny and isHumEmergeny:
-                            val = vResult[1]
-                        elif isTempEmergeny and isHumEmergeny:
-                            val = (vResult[0], vResult[1])
-                        continue
-                        """
                         data.append(vResult[0])
                         dataHum.append([vResult[1]])
                         isTemp = True
@@ -208,20 +183,61 @@ while True:
                 else:
                     temp[sens] = data
                     hum[sens] = dataHum
+            except Exception as e:
+                logging.error(e)
+
         for sens in temp:
             values = temp[sens]
             for value in values:
                 if value < max_temp_sms:
-
-        for sens in smoke:
-        for sens in water:
-        for sens in hum:
-            except Exception as e:
-                logging.error(e)
-            if isSmokeEmergeny:
-                if len(smoke) == 0:
+                    isTempEmergency = False
+                    break
+            if isTempEmergency:
+                if len(tempSens) == 0:
                     isNewEmergency = True
-                smoke[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
+                tempSens.append(sens)
+                isEmergency = True
+            isTempEmergency = True
+        for sens in smoke:
+            values = smoke[sens]
+            for value in values:
+                if value < max_rauch:
+                    isSmokeEmergency= False
+                    break
+            if isSmokeEmergency:
+                if len(smokeSens) == 0:
+                    isNewEmergency = True
+                smokeSens.append(sens)
+                isEmergency = True
+            isSmokeEmergency = True
+        for sens in water:
+            values = water[sens]
+            for value in values:
+                if value < 1:
+                    isWaterEmergency = False
+                    break
+            if isWaterEmergency:
+                if len(waterSens) == 0:
+                    isNewEmergency = True
+                waterSens.append(sens)
+                isEmergency = True
+            isWaterEmergency = True
+        for sens in hum:
+            values = hum[sens]
+            for value in values:
+                if value < max_hum:
+                    isHumEmergency = False
+                    break
+            if isHumEmergency:
+                if len(humSens) == 0:
+                    isNewEmergency = True
+                humSens.append(sens)
+                isEmergency = True
+            isHumEmergency = True
+
+
+        if len(tempSens) > 0:
+            smoke[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
             if isTempEmergeny and not isHumEmergeny:
                 if len(temp) == 0:
                     isNewEmergency = True
