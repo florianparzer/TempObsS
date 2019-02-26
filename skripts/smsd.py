@@ -156,6 +156,7 @@ while True:
 			continue
 		if not len(os.listdir(path + '/checked/')) == 0:
 			continue
+		"""
 		cur.execute(
 			"select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorName from web where zeit > '" + past + "' group by sensorName;")
 		results = cur.fetchall()
@@ -205,6 +206,7 @@ while True:
 				print(sms, file=f)
 		connection.close()
 		time.sleep(30)
+		"""
 	except Exception as outer:
 		logging.error(outer)
 		connection.close()

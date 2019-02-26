@@ -11,39 +11,19 @@ import subprocess
 from smsd import save_to_messages_db
 from Start_Shutdown import shutdown_Rack
 
-# find out local ip address (we don't want to forward failed sms packets to our own system)
-local = (([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")] or [
-    [(s.connect(("8.8.8.8", 53)), s.getsockname()[0], s.close()) for s in
-     [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) + ["no IP found"])[0]
 # set up logging
 logFormatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
 rootLogger = logging.getLogger()
-fileHandler = logging.handlers.RotatingFileHandler('/var/log/smsd/escd.log', maxBytes=1000000, backupCount=5)
+fileHandler = logging.handlers.RotatingFileHandler('/var/log/escd/escd.log', maxBytes=1000000, backupCount=5)
 fileHandler.setFormatter(logFormatter)
 console = logging.StreamHandler()
 rootLogger.addHandler(fileHandler)
 rootLogger.addHandler(console)
 rootLogger.setLevel(logging.INFO)
 
-path = "/var/spool/sms"
-sql = "select name from messsystem where ip = '%s';" % (local)
-try:
-    db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
-                         db='serverraum_temperaturueberwachung', autocommit=True)
-    cursor = db.cursor()
-    logging.info("Connected to database")
-    logging.debug(sql)
-    cursor.execute(sql)
-    systemname = cursor.fetchone()[0]
-    logging.info("SystemName is: " + systemname)
-    db.close()
-except Exception as e:
-    logging.error(e)
-    sys.exit()
-
-max_temp1 = 35.0
-max_temp2 = 45.0
-max_temp3 = 50.0
+max_temp_sms = 35.0
+max_temp_shutdown = 45.0
+max_temp_emergency = 50.0
 max_hum = 70.0
 interval = 30
 max_rauch = 10
@@ -82,6 +62,8 @@ except Exception as e:
     logging.error(e)
     sys.exit()
 
+isEmergency = False
+
 while True:
     silenced = []
     To = ""
@@ -98,15 +80,15 @@ while True:
                     num = value.split(" ")[1].strip();
                     silenced.append(num)
                     logging.info("muted: " + num)
-            if key == "max_temp1":
-                max_temp1 = float(value)
-                logging.info("max_temp1: " + str(max_temp1))
-            if key == "max_temp2":
-                max_temp2 = float(value)
-                logging.info("max_temp2: " + str(max_temp2))
-            if key == "max_temp3":
-                max_temp3 = float(value)
-                logging.info("max_temp3: " + str(max_temp3))
+            if key == "max_temp_sms":
+                max_temp_sms = float(value)
+                logging.info("max_temp_sms: " + str(max_temp_sms))
+            if key == "max_temp_shutdown":
+                max_temp_shutdown = float(value)
+                logging.info("max_temp_shutdown: " + str(max_temp_shutdown))
+            if key == "max_temp_emergency":
+                max_temp_emergency = float(value)
+                logging.info("max_temp_emergency: " + str(max_temp_emergency))
             if key == "max_hum":
                 max_hum = float(value)
                 logging.info("max_hum: " + str(max_hum))
@@ -157,35 +139,51 @@ while True:
         isNewEmergency = False
         isShutdownPhase = False
         for result in results:
-            cur.execute(
-                   f"select temp , feucht,  wasser , rauch from web where zeit > '{past}' and sensorName = {result};")
-            valueResults = cur.fetchall()
-            isTempEmergeny = True
-            isHumEmergeny = True
-            isSmokeEmergeny = True
-            sens = result[0]
-            for vResult in valueResults:
-                try:
+            try:
+                sens = result[0]
+                cur.execute(
+                    f"select temp , feucht,  wasser , rauch from web where zeit > '{past}' and sensorName = {sens};")
+                valueResults = cur.fetchall()
+                isTemp = False
+                isHum = False
+                isSmoke = False
+                isWater = False
+                data = []
+                dataHum = []
+                for vResult in valueResults:
                     if vResult[0] == None and vResult[1] == None and vResult[2] == None:
+                        """
                         if float(vResult[3]) < max_rauch:
                             isSmokeEmergeny = False
                         else:
                             val = vResult[3]
                         continue
+                        """
+                        data.append(vResult[3])
+                        isSmoke = True
                     elif vResult[0] == None and vResult[1] == None:
+                        """
                         if float(vResult[2]) > 0:
                             water[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(vResult[2])
                         else:
                             del water[vResult[4]]
                         continue
+                        """
+                        data.append(vResult[2])
+                        isWater = True
                     elif vResult[1] == None:
-                        if float(vResult[0]) < max_temp1:
+                        """
+                        if float(vResult[0]) < max_temp_sms:
                             isTempEmergeny = False
                         else:
                             val = vResult[3]
                         continue
+                        """
+                        data.append(vResult[0])
+                        isTemp = True
                     else:
-                        if float(vResult[0]) < max_temp1:
+                        """
+                        if float(vResult[0]) < max_temp_sms:
                             isTempEmergeny = False
                         if float(vResult[1]) < max_hum:
                             isHumEmergeny = False
@@ -196,8 +194,30 @@ while True:
                         elif isTempEmergeny and isHumEmergeny:
                             val = (vResult[0], vResult[1])
                         continue
-                except Exception as e:
-                    logging.error(e)
+                        """
+                        data.append(vResult[0])
+                        dataHum.append([vResult[1]])
+                        isTemp = True
+                        isHum = True
+                if isSmoke:
+                    smoke[sens] = data
+                elif isWater:
+                    water[sens] = data
+                elif isTemp and not isHum:
+                    temp[sens] = data
+                else:
+                    temp[sens] = data
+                    hum[sens] = dataHum
+        for sens in temp:
+            values = temp[sens]
+            for value in values:
+                if value < max_temp_sms:
+
+        for sens in smoke:
+        for sens in water:
+        for sens in hum:
+            except Exception as e:
+                logging.error(e)
             if isSmokeEmergeny:
                 if len(smoke) == 0:
                     isNewEmergency = True
@@ -222,7 +242,7 @@ while True:
             normTemp = dict()
             normHum = dict()
             normSmoke = dict()
-            for name in result:
+            for name in results:
                 if name in temp or name in hum or name in smoke:
                     continue
                 cur.execute(
@@ -272,7 +292,7 @@ while True:
             temperatures = cur.fetchall()
             isShutdownPhase = True
             for temperature in temperatures:
-                if temperature < max_temp2:
+                if temperature < max_temp_shutdown:
                     isShutdownPhase = False
                     break
             if isShutdownPhase:
@@ -288,3 +308,4 @@ while True:
     except Exception as outer:
         logging.error(outer)
     connection.close()
+#Notfall antwort mit Datenbank

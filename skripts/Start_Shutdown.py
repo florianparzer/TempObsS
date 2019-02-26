@@ -222,7 +222,7 @@ def shutdownVM_Kill(ips, vCenterIP, type):
     Führt einen Kill Befehl auf den Servern mit den IP-Adressen, die in ips sind, druch
     :param ips: die IP-Adressen der ESXi-Hosts
     :param vCenterIP: die IP-Adresse des vCenter-Servers
-    :param type: der Type des Kill-Befehlts (soft, hard, forced)
+    :param type: der Type des Kill-Befehlts (soft, hard, force)
     '''
     try:
         for ip in ips:
@@ -282,7 +282,7 @@ def shutdownvCenter_Kill(ip, vCenterID, type):
     Führt einen Kill Befehl druch, um den vCenter Server herunterzufahren
     :param ip: die IP Adresse des ESXi Hosts, auf dem der vCenter Server läuft
     :param vCenterID: die WorldID des vCenter Servers
-    :param type: der Type des Kill-Befehlts (soft, hard, forced)
+    :param type: der Type des Kill-Befehlts (soft, hard, force)
     """
     try:
         try:
