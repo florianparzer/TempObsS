@@ -112,7 +112,7 @@ while True:
         now = datetime.datetime.now()
         nowf = now.strftime("%Y-%m-%d %H:%M:%S")
         past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
-        past30 = now - datetime.timedelta(minutes=interval)
+        pastIntervall = now - datetime.timedelta(minutes=interval)
         past18 = now - datetime.timedelta(hours=18)
         tm = now + datetime.timedelta(days=1)
         yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
@@ -141,12 +141,17 @@ while True:
         hum = dict()
         smoke = dict()
         water = dict()
+        normSmoke = ""
+        normHum = ""
+        normTemp = ""
         isTempEmergency = True
         isSmokeEmergency = True
         isWaterEmergency = True
         isHumEmergency = True
         isNewEmergency = False
+        message = up
 
+        #Daten der letzen 5 Min auslesen und nach Kategorie gruppieren
         for result in results:
             try:
                 sens = result[0]
@@ -185,7 +190,9 @@ while True:
                     hum[sens] = dataHum
             except Exception as e:
                 logging.error(e)
+                continue
 
+        #Überprüfen ob es einen Emergency gibt
         for sens in temp:
             values = temp[sens]
             for value in values:
@@ -235,80 +242,73 @@ while True:
                 isEmergency = True
             isHumEmergency = True
 
-
+        #Emergencies in Message schreiben
         if len(tempSens) > 0:
-            smoke[sens] = "Die Rauch-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
-            if isTempEmergeny and not isHumEmergeny:
-                if len(temp) == 0:
-                    isNewEmergency = True
-                temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
-            elif not isTempEmergeny and isHumEmergeny:
-                if len(hum) == 0:
-                    isNewEmergency = True
-                hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(val)
-            else:
-                tval, hval = val
-                if len(temp) == 0 or len(hum) == 0:
-                    isNewEmergency = True
-                temp[sens] = "Die Temperatur-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(tval)
-                hum[sens] = "Die Luftfeuchtigkeits-Werte an Sensor " + sens + " sind außerhalb des Normalbereichs: " + str(hval)
+            message += "Temperatur Emergencies:\n"
+            for sens in temp:
+                val = temp[sens][-1]
+                if sens in tempSens:
+                    message += f"Die Temperatur-Werte an Sensor {sens} sind außerhalb des Normalbereichs: {val}\n"
+                else:
+                    normTemp += f"Die aktuelle Temperatur am Sensor {sens} ist: {val}\n"
+        if normTemp != "":
+            normTemp = f"Aktuelle Temperaturwerte:\n{normTemp}\n"
+        message += "\n"
 
-        message = up
-        if len(temp) > 0 or len(hum) > 0 or len(smoke) > 0 or len(water) > 0:
-            normTemp = dict()
-            normHum = dict()
-            normSmoke = dict()
-            for name in results:
-                if name in temp or name in hum or name in smoke:
-                    continue
-                cur.execute(
-                    f"select temp, feucht, rauch from web where temp is not null and sensorName = '{name}' order by zeit limit 1;")
-                tfrResults = cur.fetchall()
-                for value in tfrResults:
-                    if value[0] == None and value[1] == None:
-                        normSmoke[name] = f"Die aktuellen Rachwerte am Sensor {name} sind {value[2]}"
-                    elif value[1] == None:
-                        normTemp[name] = f"Die aktuelle Temperatur am Sensor {name} ist {value[0]}"
-                    else:
-                        normTemp[name] = f"Die aktuelle Temperatur am Sensor {name} ist {value[0]}"
-                        normHum[name] = f"Die aktuelle Luftfeuchtigkeit am Sensor {name} ist {value[1]}"
+        if len(smokeSens) > 0:
+            message += "Rauch Emergencies:\n"
+            for sens in smoke:
+                val = smoke[sens][-1]
+                if sens in smokeSens:
+                    message += f"Die Rauch-Werte an Sensor {sens} sind außerhalb des Normalbereichs: {val}\n"
+                else:
+                    normSmoke += f"Der aktuelle Rauch-Wert am Sensor {sens} ist: {val}\n"
+            if normSmoke!="":
+                normSmoke= f"Aktuelle Rauchwerte:\n{normSmoke}\n"
+            message += "\n"
 
-            for element in temp:
-                message += temp[element + '\n']
-            for element in hum:
-                message += hum[element + '\n']
-            for element in smoke:
-                message += smoke[element + '\n']
-            for element in water:
-                message += water[element + '\n']
-            for element in normTemp:
-                message += temp[element + '\n']
-            for element in normHum:
-                message += temp[element + '\n']
-            for element in normSmoke:
-                message += temp[element + '\n']
+        if len(waterSens) > 0:
+            message += "Wasser Emergencies:\n"
+            for sens in waterSens:
+                val = water[sens][-1]
+                message += f"Die Wasser-Werte an Sensor {sens} sind außerhalb des Normalbereichs: {val}\n"
+            message += "\n"
 
-            files = os.listdir(path + "/sent/")
-            for file in files:
-                if str(file) == 'emergency-sms.txt' and (
-                        datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > past30) and not isNewEmergency:
-                    logging.info("Notfallsms vor weniger als 30 Min gesendet")
-                    message = ''
-            if message != '':
-                save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
-                with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
-                    print(message, file=f)
-                logging.info("Notfallsms versendet")
+        if len(humSens) > 0:
+            message += "Luftfeuchtigkeit Emergencies:\n"
+            for sens in hum:
+                val = hum[sens][-1]
+                if sens in humSens:
+                    message += f"Die Luftfeuchtigkeits-Werte an Sensor {sens} sind außerhalb des Normalbereichs: {val}\n"
+                else:
+                    normHum+=f"Der aktuelle Luftfeuchtigkeits-Werte an Sensor {sens} ist: {val}\n"
+            if normHum != "":
+                normHum = f"Aktuelle Luftfeuchtigkeitswerte:\n{normHum}\n"
+            message += "\n"
+
+        message+=normTemp+normSmoke+normHum
+
+        files = os.listdir(path + "/sent/")
+        for file in files:
+            if str(file) == 'emergency-sms.txt' and (
+                    datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall) and not isNewEmergency:
+                logging.info("Notfallsms vor weniger als 30 Min gesendet")
+                message = ''
+        if message != '':
+            save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
+            with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
+                print(message, file=f)
+            logging.info("Notfallsms versendet")
 
         cur.execute("select sensorName from sensor;")
         results = cur.fetchall()
         for result in results:
-            cur.execute(cur.execute(
-                   f"select temp from web where zeit > '{past}' and sensorName = {result[0]};"))
+            cur.execute(
+                   f"select temp from web where zeit > '{past}' and sensorName = {result[0]};")
             temperatures = cur.fetchall()
             isShutdownPhase = True
             for temperature in temperatures:
-                if temperature < max_temp_shutdown:
+                if temperature[0] < max_temp_shutdown:
                     isShutdownPhase = False
                     break
             if isShutdownPhase:
@@ -318,8 +318,7 @@ while True:
             cur.execute(f'select rackNr_int from rack where priority = (select min(priority) from rack);')
             racks = cur.fetchall()
             for rack in racks:
-                rack = rack[0]
-                shutdown_Rack(rack)
+                shutdown_Rack(rack[0])
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)

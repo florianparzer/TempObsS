@@ -191,7 +191,7 @@ while True:
 			for file in files:
 				for n in str(file)[:-4].split("-"):
 					if name == n and (
-							datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > past30):
+							datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall):
 						logging.info("")
 						message = ""
 						name = ""
