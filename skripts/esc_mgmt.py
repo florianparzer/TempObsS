@@ -107,16 +107,17 @@ while True:
             To = To + f"To: {i}\n"
 
     up = To + "\nTemperaturüberwachung " + systemname + " Notfallsms:\n "
+    shutdown_head = To + "\nTemperaturüberwachung " + systemname + " Shutdownanfrage:\n "
 
     try:
         now = datetime.datetime.now()
         nowf = now.strftime("%Y-%m-%d %H:%M:%S")
         past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
         pastIntervall = now - datetime.timedelta(minutes=interval)
-        past18 = now - datetime.timedelta(hours=18)
+        pastAnswerTime = now - datetime.timedelta(hours=4)
         tm = now + datetime.timedelta(days=1)
         yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-        if To == "" and not datetime.datetime.fromtimestamp(os.stat("/home/pi/alive.txt").st_mtime) < past18:
+        if To == "":
             time.sleep(10)
             logging.info("muted")
             continue
@@ -127,6 +128,10 @@ while True:
             connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
                                          db='serverraum_temperaturueberwachung', autocommit=True)
             cur = connection.cursor()
+
+            mdb = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='messages',
+                                  autocommit=True)
+            mcursor = mdb.cursor()
         except Exception as e:
             logging.error(e)
             continue
@@ -150,6 +155,7 @@ while True:
         isHumEmergency = True
         isNewEmergency = False
         message = up
+        isShutdownPhase = True
 
         #Daten der letzen 5 Min auslesen und nach Kategorie gruppieren
         for result in results:
@@ -204,6 +210,8 @@ while True:
                     isNewEmergency = True
                 tempSens.append(sens)
                 isEmergency = True
+            elif sens in tempSens:
+                tempSens.remove(sens)
             isTempEmergency = True
         for sens in smoke:
             values = smoke[sens]
@@ -216,6 +224,8 @@ while True:
                     isNewEmergency = True
                 smokeSens.append(sens)
                 isEmergency = True
+            elif sens in smokeSens:
+                smokeSens.remove(sens)
             isSmokeEmergency = True
         for sens in water:
             values = water[sens]
@@ -228,6 +238,8 @@ while True:
                     isNewEmergency = True
                 waterSens.append(sens)
                 isEmergency = True
+            elif sens in waterSens:
+                waterSens.remove(sens)
             isWaterEmergency = True
         for sens in hum:
             values = hum[sens]
@@ -240,6 +252,8 @@ while True:
                     isNewEmergency = True
                 humSens.append(sens)
                 isEmergency = True
+            elif sens in humSens:
+                humSens.remove(sens)
             isHumEmergency = True
 
         #Emergencies in Message schreiben
@@ -286,39 +300,81 @@ while True:
                 normHum = f"Aktuelle Luftfeuchtigkeitswerte:\n{normHum}\n"
             message += "\n"
 
-        message+=normTemp+normSmoke+normHum
+        if len(tempSens) == 0 and len(smokeSens) == 0 and len(waterSens) == 0 and len(humSens) == 0 and isEmergency:
+            isEmergency = False
+            message += 'Der Normalzustand ist wieder eingetreten.'
+            try:
+                save_to_messages_db(cur, nowf, 1, 'Entwarnung', message)
+                with open("/var/spool/sms/outgoing/all-clear-sms.txt", mode='w') as f:
+                    print(message, file=f)
+                logging.info("Notfallsms versendet")
+                continue
+            except Exception as e:
+                logging.error(e)
+                isEmergency = True
+                continue
+        message += normTemp+normSmoke+normHum
 
-        files = os.listdir(path + "/sent/")
-        for file in files:
-            if str(file) == 'emergency-sms.txt' and (
-                    datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall) and not isNewEmergency:
-                logging.info("Notfallsms vor weniger als 30 Min gesendet")
-                message = ''
-        if message != '':
-            save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
-            with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
-                print(message, file=f)
-            logging.info("Notfallsms versendet")
+        try:
+            files = os.listdir(path + "/sent/")
+            for file in files:
+                if str(file) == 'emergency-sms.txt' and (
+                        datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall) and not isNewEmergency:
+                    logging.info("Notfallsms vor weniger als 30 Min gesendet")
+                    message = ''
+            if message != '':
+                save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
+                with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
+                    print(message, file=f)
+                logging.info("Notfallsms versendet")
 
-        cur.execute("select sensorName from sensor;")
-        results = cur.fetchall()
-        for result in results:
-            cur.execute(
-                   f"select temp from web where zeit > '{past}' and sensorName = {result[0]};")
-            temperatures = cur.fetchall()
-            isShutdownPhase = True
-            for temperature in temperatures:
-                if temperature[0] < max_temp_shutdown:
-                    isShutdownPhase = False
+        except Exception as e:
+            logging.error(e)
+
+        try:
+            cur.execute("select sensorName from sensor;")
+            results = cur.fetchall()
+            for result in results:
+                cur.execute(
+                       f"select temp from web where zeit > '{past}' and sensorName = {result[0]};")
+                temperatures = cur.fetchall()
+                for temperature in temperatures:
+                    if temperature[0] < max_temp_shutdown:
+                        isShutdownPhase = False
+                        break
+                if isShutdownPhase:
                     break
-            if isShutdownPhase:
-                break
+
+        except Exception as e:
+            logging.error(e)
 
         if isShutdownPhase:
-            cur.execute(f'select rackNr_int from rack where priority = (select min(priority) from rack);')
-            racks = cur.fetchall()
-            for rack in racks:
-                shutdown_Rack(rack[0])
+            mcursor.execute(f'select count(isOpen), from message where isOpen = true')
+            number = mcursor.fetchone()
+            if number[0] == 0:
+                cur.execute(f'select rackNr_int, rackNr_ext from rack '
+                            + f'where priority = (select min(priority) from rack '
+                            + f'where rackNr_int in (select distinct rackNr_int form server where connectivity = true));')
+                racks = cur.fetchall()
+                rack_ids = []
+                shutdown_message = shutdown_head + 'Sollen die Racks '
+                for rack in racks:
+                    rack_ids.append(rack[0])
+                    shutdown_message += f'{rack[1]}, '
+                shutdown_message = shutdown_message[0,-2] + ' abgeschaltet werden?'
+                save_to_messages_db(cur, nowf, 1, 'Shutdown_Message', shutdown_message)
+                with open("/var/spool/sms/outgoing/shutdwon-message.txt", mode='w') as f:
+                    print(message, file=f)
+                logging.info("Shutdown_Message versendet")
+                shutdown_time = datetime.datetime.now()
+            else:
+                mcursor.execute(f'select answer, from message where isOpen = true')
+                answer = mcursor.fetchone()
+                if answer[0] or shutdown_time < pastAnswerTime:
+                    for rack_id in rack_ids:
+                        shutdown_Rack(rack_id)
+                        logging.info(f"Rack {rack_id} abgeschaltet")
+                    mcursor.execute(f'update message set isOpen = False where isOpen = True')
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)
