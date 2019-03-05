@@ -25,7 +25,7 @@ def save_to_messages_db(cur, nowf, type, title, sms):
 				logging.info("Saving sms in: " +system[0])
 				mdb = pymysql.connect(host=system[0], user='webuser', password='La4R2uyME78hAfn9I1pH',db='messages',autocommit=True)
 				mcursor = mdb.cursor()
-				sql = "insert into message values ('%s', %d, '%s', '%s')" % (str(nowf),type,title, sms)
+				sql = "insert into message (zeit, typ, betreff, text) values ('%s', %d, '%s', '%s');" % (str(nowf),type,title, sms)
 				logging.debug(sql)
 				mcursor.execute(sql)
 				mdb.close()
@@ -103,110 +103,111 @@ while True:
 
 	for i in rec:
 		if i not in silenced:
-			To = To + "To: " + str(i) + "\n"
+			To = "To: " + str(i) + "\n"
 
-	up = To + "\nTemperaturüberwachung " + systemname + ":\n"
-	try:
-		now = datetime.datetime.now()
-		nowf = now.strftime("%Y-%m-%d %H:%M:%S")
-		past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
-		past30 = now - datetime.timedelta(minutes=interval)
-		past18 = now - datetime.timedelta(hours=18)
-		tm = now + datetime.timedelta(days=1)
-		yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-		if silent and not datetime.datetime.fromtimestamp(os.stat("/home/pi/alive.txt").st_mtime) < past18:
-			time.sleep(10)
-			logging.info("muted")
-			continue
-		sms = up
-		title = ""
-		logging.info("try connecting to db")
-		try:
-			connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
-										 db='serverraum_temperaturueberwachung', autocommit=True)
-		except Exception as e:
-			logging.error(e)
-			continue
-		cur = connection.cursor()
-		if datetime.datetime.fromtimestamp(os.stat("/home/pi/alive.txt").st_mtime) < past18:
-			cur.execute("select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '" + yes + "' group by sensorPosition;")
-			results = cur.fetchall()
-			da = up + "Das System ist online.\nDurschnittswerte:\n"
-			with open("/var/spool/sms/outgoing/alive.txt", mode='w') as f:
-				print(up + "Das System ist online.\nDurschnittswerte:\n", file=f)
-				for result in results:
-					if result[0] == None and result[1] == None and result[2] == None:
-						print(result[4] + ": " + str(result[3]) + "\n", file=f)
-						da = da + result[4] + ": " + str(result[3]) + "\n"
-					elif result[0] == None and result[1] == None:
-						print(result[4] + ": " + str(result[2]) + "\n", file=f)
-						da = da + result[4] + ": " + str(result[2]) + "\n"
-					elif result[1] == None:
-						print(result[4] + ": " + str(result[0]) + "°C\n", file=f)
-						da = da + result[4] + ": " + str(result[0]) + "°C\n"
-					else:
-						print(result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) + " %\n", file=f)
-						da = da + result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) + " %\n"
-			os.system("touch -d " + tm.strftime("%Y%m%d") + " /home/pi/alive.txt")
-			save_to_messages_db(cur, nowf, 2, "alive", da)
-			logging.info("daily SMS sent")
-			cur.execute("delete from messung where zeit < '" + yes + "';")
-			logging.info("daily delete")
-			connection.close()
-			continue
-		if not len(os.listdir(path + '/checked/')) == 0:
-			continue
-		"""
-		cur.execute(
-			"select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorName from web where zeit > '" + past + "' group by sensorName;")
-		results = cur.fetchall()
-		msgs = dict()
-		for result in results:
+			up = To + "\nTemperaturüberwachung " + systemname + ":\n"
 			try:
-				if result[0] == None and result[1] == None and result[2] == None:
-					if float(result[3]) > max_rauch:
-						msgs[result[4] + "r"] = "Die Werte an Sensor " + result[
-							4] + " sind außerhalb des Normalbereichs: " + str(result[3]) + "\n"
+				now = datetime.datetime.now()
+				nowf = now.strftime("%Y-%m-%d %H:%M:%S")
+				past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
+				past30 = now - datetime.timedelta(minutes=interval)
+				past18 = now - datetime.timedelta(hours=18)
+				tm = now + datetime.timedelta(days=1)
+				yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+				if silent and not datetime.datetime.fromtimestamp(os.stat("/home/pi/alive.txt").st_mtime) < past18:
+					time.sleep(10)
+					logging.info("muted")
 					continue
-				elif result[0] == None and result[1] == None:
-					if float(result[2]) > 0:
-						msgs[result[4] + "w"] = "Die Werte an Sensor " + result[
-							4] + " sind außerhalb des Normalbereichs: " + str(result[2]) + "\n"
+				sms = up
+				title = ""
+				logging.info("try connecting to db")
+				try:
+					connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
+												 db='serverraum_temperaturueberwachung', autocommit=True)
+				except Exception as e:
+					logging.error(e)
 					continue
-				elif result[1] == None:
-					if float(result[0]) > max_temp:
-						msgs[result[4] + "t"] = "Die Werte an Sensor " + result[
-							4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C\n"
+				cur = connection.cursor()
+				if datetime.datetime.fromtimestamp(os.stat("/home/pi/alive.txt").st_mtime) < past18:
+					cur.execute("select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '" + yes + "' group by sensorPosition;")
+					results = cur.fetchall()
+					da = up + "Das System ist online.\nDurschnittswerte:\n"
+					with open("/var/spool/sms/outgoing/alive.txt", mode='w') as f:
+						print(up + "Das System ist online.\nDurschnittswerte:\n", file=f)
+						for result in results:
+							if result[0] == None and result[1] == None and result[2] == None:
+								print(result[4] + ": " + str(result[3]) + "\n", file=f)
+								da = da + result[4] + ": " + str(result[3]) + "\n"
+							elif result[0] == None and result[1] == None:
+								print(result[4] + ": " + str(result[2]) + "\n", file=f)
+								da = da + result[4] + ": " + str(result[2]) + "\n"
+							elif result[1] == None:
+								print(result[4] + ": " + str(result[0]) + "°C\n", file=f)
+								da = da + result[4] + ": " + str(result[0]) + "°C\n"
+							else:
+								print(result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) + " %\n", file=f)
+								da = da + result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) + " %\n"
+					os.system("touch -d " + tm.strftime("%Y%m%d") + " /home/pi/alive.txt")
+					save_to_messages_db(cur, nowf, 2, "alive", da)
+					logging.info("daily SMS sent")
+					cur.execute("delete from messung where zeit < '" + yes + "';")
+					logging.info("daily delete")
+					connection.close()
+					time.sleep(20)
 					continue
-				else:
-					if float(result[0]) > max_temp and float(result[1]) > max_hum:
-						msgs[result[4] + "tf"] = "Die Werte an Sensor " + result[
-							4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C/" + str(
-							result[1]) + "%\n"
+				if not len(os.listdir(path + '/checked/')) == 0:
 					continue
-			except Exception as e:
-				logging.error(e)
-		files = os.listdir(path + "/sent/")
-		for name, message in msgs.items():
-			for file in files:
-				for n in str(file)[:-4].split("-"):
-					if name == n and (
-							datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall):
-						logging.info("")
-						message = ""
-						name = ""
-			sms += message
-			if message != "":
-				title += name + "-"
-			logging.info("added " + message + "to SMS")
-		if not title == "":
-			logging.info("title of sms is: " + title)
-			save_to_messages_db(cur, nowf, 1, title[:-1], sms)
-			with open("/var/spool/sms/outgoing/" + title[:-1] + ".txt", mode='w') as f:
-				print(sms, file=f)
-		connection.close()
-		time.sleep(30)
-		"""
-	except Exception as outer:
-		logging.error(outer)
-		connection.close()
+				"""
+				cur.execute(
+					"select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorName from web where zeit > '" + past + "' group by sensorName;")
+				results = cur.fetchall()
+				msgs = dict()
+				for result in results:
+					try:
+						if result[0] == None and result[1] == None and result[2] == None:
+							if float(result[3]) > max_rauch:
+								msgs[result[4] + "r"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[3]) + "\n"
+							continue
+						elif result[0] == None and result[1] == None:
+							if float(result[2]) > 0:
+								msgs[result[4] + "w"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[2]) + "\n"
+							continue
+						elif result[1] == None:
+							if float(result[0]) > max_temp:
+								msgs[result[4] + "t"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C\n"
+							continue
+						else:
+							if float(result[0]) > max_temp and float(result[1]) > max_hum:
+								msgs[result[4] + "tf"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C/" + str(
+									result[1]) + "%\n"
+							continue
+					except Exception as e:
+						logging.error(e)
+				files = os.listdir(path + "/sent/")
+				for name, message in msgs.items():
+					for file in files:
+						for n in str(file)[:-4].split("-"):
+							if name == n and (
+									datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall):
+								logging.info("")
+								message = ""
+								name = ""
+					sms += message
+					if message != "":
+						title += name + "-"
+					logging.info("added " + message + "to SMS")
+				if not title == "":
+					logging.info("title of sms is: " + title)
+					save_to_messages_db(cur, nowf, 1, title[:-1], sms)
+					with open("/var/spool/sms/outgoing/" + title[:-1] + ".txt", mode='w') as f:
+						print(sms, file=f)
+				connection.close()
+				time.sleep(30)
+				"""
+			except Exception as outer:
+				logging.error(outer)
+				connection.close()
