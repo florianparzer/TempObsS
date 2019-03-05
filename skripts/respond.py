@@ -213,7 +213,7 @@ while True:
                                                           db='messages', autocommit=True)
                                     mcursor = mdb.cursor()
                                     # sms is type 3 == requested info
-                                    sql = "insert into message (zeit, typ, betreff, text) values ('%s', %d, '%s', '%s')" % \
+                                    sql = "insert into message (zeit, typ, betreff, text) values ('%s', %d, '%s', '%s');" % \
                                           (str(nowf), 3, "status", sms)
                                     mcursor.execute(sql)
                                     mdb.close()

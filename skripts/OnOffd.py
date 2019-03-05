@@ -9,7 +9,7 @@ import time
 local = (([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")] or [[(s.connect(("8.8.8.8", 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) + ["no IP found"])[0]
 logFormatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
 rootLogger = logging.getLogger()
-fileHandler = logging.handlers.RotatingFileHandler('/var/log/smsd/onoffd.log', maxBytes=1000000, backupCount=5)
+fileHandler = logging.handlers.RotatingFileHandler('/var/log/escd/onoffd.log', maxBytes=1000000, backupCount=5)
 fileHandler.setFormatter(logFormatter)
 console = logging.StreamHandler()
 rootLogger.addHandler(fileHandler)
