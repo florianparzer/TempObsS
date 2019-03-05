@@ -114,6 +114,7 @@ while True:
         nowf = now.strftime("%Y-%m-%d %H:%M:%S")
         past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
         pastIntervall = now - datetime.timedelta(minutes=interval)
+        shutdown_time = None
         pastAnswerTime = now - datetime.timedelta(hours=4)
         tm = now + datetime.timedelta(days=1)
         yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
@@ -335,6 +336,7 @@ while True:
             cur.execute("select sensorName from sensor;")
             results = cur.fetchall()
             for result in results:
+                isShutdownPhase = True
                 cur.execute(
                        f"select temp from web where zeit > '{past}' and sensorName = {result[0]};")
                 temperatures = cur.fetchall()
@@ -351,7 +353,7 @@ while True:
         if isShutdownPhase:
             mcursor.execute(f'select count(isOpen), from message where isOpen = true')
             number = mcursor.fetchone()
-            if number[0] == 0:
+            if number[0] == 0 and shutdown_time == None:
                 cur.execute(f'select rackNr_int, rackNr_ext from rack '
                             + f'where priority = (select min(priority) from rack '
                             + f'where rackNr_int in (select distinct rackNr_int form server where connectivity = true));')
@@ -367,14 +369,19 @@ while True:
                     print(message, file=f)
                 logging.info("Shutdown_Message versendet")
                 shutdown_time = datetime.datetime.now()
-            else:
+            elif number > 0:
                 mcursor.execute(f'select answer, from message where isOpen = true')
                 answer = mcursor.fetchone()
-                if answer[0] or shutdown_time < pastAnswerTime:
+                if answer[0]:
                     for rack_id in rack_ids:
                         shutdown_Rack(rack_id)
                         logging.info(f"Rack {rack_id} abgeschaltet")
                     mcursor.execute(f'update message set isOpen = False where isOpen = True')
+            elif shutdown_time != None and shutdown_time < pastAnswerTime:
+                for rack_id in rack_ids:
+                    shutdown_Rack(rack_id)
+                    logging.info(f"Rack {rack_id} abgeschaltet")
+                shutdown_time = None
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)
