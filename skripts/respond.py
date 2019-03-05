@@ -62,7 +62,7 @@ except Exception as e:
 
 up = "Temperaturüberwachung " + systemname + ":\n"
 # text of the help message
-help = "\nAvailable commands: \nHELP - Displays all commands\nSTATUS - Displays actual status\nMUTE - For 24h\nMUTE: 'Anzahl der Tage'd 'Anzahl der Stunden'h\nUNMUTE\nINTERVAL: mins - to change the interval\n\
+help = up + "\nAvailable commands: \nHELP - Displays all commands\nSTATUS - Displays actual status\nMU  TE - For 24h\nMUTE: 'Anzahl der Tage'd 'Anzahl der Stunden'h\nUNMUTE\nINTERVAL: mins - to change the interval\n\
 \nMAXTEMP: degrees"
 
 muteend = ""
@@ -171,7 +171,7 @@ while True:
                         if line.startswith("From:"):
                             To = "To: " + line[5:] + "\n"
                             number = line[5:].strip()
-                            header = To + up
+                            up = To + up
 
                             for person in people:
                                 if person == line[5:].strip():
@@ -187,9 +187,9 @@ while True:
                                 cur.execute(
                                     "select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorPosition from view_24 where zeit > '" + rec + "' group by sensorPosition;")
                                 results = cur.fetchall()
-                                sms = header + "Das System ist online.\nDurschnittswerte:\n"
+                                sms = up + "Das System ist online.\nDurschnittswerte:\n"
                                 with open("/var/spool/sms/outgoing/status.txt", mode='w') as f:
-                                    print(header + "Das System ist online.\nDurschnittswerte:\n", file=f)
+                                    print(up + "Das System ist online.\nDurschnittswerte:\n", file=f)
                                     for result in results:
                                         if result[0] == None and result[1] == None and result[2] == None:
                                             print(result[4] + ": " + str(result[3]) + "\n", file=f)
@@ -213,7 +213,7 @@ while True:
                                                           db='messages', autocommit=True)
                                     mcursor = mdb.cursor()
                                     # sms is type 3 == requested info
-                                    sql = "insert into message values ('%s', %d, '%s', '%s')" % \
+                                    sql = "insert into message (zeit, typ, betreff, text) values ('%s', %d, '%s', '%s')" % \
                                           (str(nowf), 3, "status", sms)
                                     mcursor.execute(sql)
                                     mdb.close()
@@ -292,20 +292,43 @@ while True:
                             logging.info("help was requested")
                             logging.debug(help)
                             with open("/var/spool/sms/outgoing/help.txt", mode="w") as f:
-                                print(header + help, file=f)
+                                print(up + help, file=f)
                             continue
-                        '''
                         elif re.match(r'ja',line,re.IGNORECASE) and shutdown:
-
+                            '''
                             if len(line.strip().split(" ")) == 2:
                                 if line.strip().split(" ")[1].strip() == "schoeni12":
 
                             else:
+                            '''
+                            try:
+                                connection = pymysql.connect(host='localhost', user='webuser',
+                                                             password='La4R2uyME78hAfn9I1pH',
+                                                             db='messages', autocommit=True)
+                                cur = connection.cursor()
+                                cur.execute(
+                                    "select zeit from message where isopen is True;")
+                                answer = cur.fetchall()
+                                cur.execute("update message set answer = True where zeit = " + answer[0][0])
 
+                            except:
+                                logging.info("couldnt connect to db")
 
 
                         elif re.match(r'nein',line,re.IGNORECASE) and shutdown:
-                        '''
+                            try:
+                                connection = pymysql.connect(host='localhost', user='webuser',
+                                                             password='La4R2uyME78hAfn9I1pH',
+                                                             db='message', autocommit=True)
+                                cur = connection.cursor()
+                                cur.execute(
+                                    "select zeit from message where isopen is True;")
+                                answer = cur.fetchall()
+                                cur.execute("update message set isopen = False where zeit = " + answer[0][0] + ";")
+
+                            except:
+                                logging.info("couldnt connect to db")
+
 
                 os.system("rm " + path + "/incoming/" + file)
             if changed:
