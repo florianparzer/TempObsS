@@ -257,6 +257,21 @@ while True:
                 humSens.remove(sens)
             isHumEmergency = True
 
+        #Entwarnung
+        if len(tempSens) == 0 and len(smokeSens) == 0 and len(waterSens) == 0 and len(humSens) == 0 and isEmergency:
+            isEmergency = False
+            message += 'Der Normalzustand ist wieder eingetreten.'
+            try:
+                save_to_messages_db(cur, nowf, 1, 'Entwarnung', message)
+                with open("/var/spool/sms/outgoing/all-clear-sms.txt", mode='w') as f:
+                    print(message, file=f)
+                logging.info("Entwarnungssms versendet")
+                continue
+            except Exception as e:
+                logging.error(e)
+                isEmergency = True
+                continue
+
         #Emergencies in Message schreiben
         if len(tempSens) > 0:
             message += "Temperatur Emergencies:\n"
@@ -301,19 +316,6 @@ while True:
                 normHum = f"Aktuelle Luftfeuchtigkeitswerte:\n{normHum}\n"
             message += "\n"
 
-        if len(tempSens) == 0 and len(smokeSens) == 0 and len(waterSens) == 0 and len(humSens) == 0 and isEmergency:
-            isEmergency = False
-            message += 'Der Normalzustand ist wieder eingetreten.'
-            try:
-                save_to_messages_db(cur, nowf, 1, 'Entwarnung', message)
-                with open("/var/spool/sms/outgoing/all-clear-sms.txt", mode='w') as f:
-                    print(message, file=f)
-                logging.info("Notfallsms versendet")
-                continue
-            except Exception as e:
-                logging.error(e)
-                isEmergency = True
-                continue
         message += normTemp+normSmoke+normHum
 
         try:
@@ -332,6 +334,7 @@ while True:
         except Exception as e:
             logging.error(e)
 
+        # Phase 2
         try:
             cur.execute("select sensorName from sensor;")
             results = cur.fetchall()
@@ -387,5 +390,4 @@ while True:
         logging.error(outer)
     connection.close()
 #Notfall antwort mit Datenbank
-#Entwarnung
 #Nur sensoren die online sind
