@@ -163,7 +163,7 @@ while True:
             try:
                 sens = result[0]
                 cur.execute(
-                    f"select temp , feucht,  wasser , rauch from web where zeit > '{past}' and sensorName = {sens};")
+                    f"select temp , feucht,  wasser , rauch from web where zeit > '{past}' and sensorName = '{sens}';")
                 valueResults = cur.fetchall()
                 isTemp = False
                 isHum = False
@@ -387,3 +387,5 @@ while True:
         logging.error(outer)
     connection.close()
 #Notfall antwort mit Datenbank
+#Entwarnung
+#Nur sensoren die online sind
