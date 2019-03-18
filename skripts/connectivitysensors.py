@@ -64,11 +64,14 @@ while True:
         cur.execute('select status from sensor where sensorID = ' + str(sensor))
         status = cur.fetchall()
         status = status[0][0]
-        logging.info(status)
+        logging.info(str(sensor) + status)
         if now - timedelta(minutes=2) > date and status == "online":
             #update db
             logging.info("update offline")
             cur.execute('update sensor set status = \'offline\' where sensorID = ' + str(sensor))
+
+            if "sensor_offline.txt" in os.listdir("/var/spool/smstools/outgoing") or "sensor_offline.txt" in os.listdir("/var/spool/smstools/checked"):
+                time.sleep(20)
 
             #sms versenden
             with open("/var/spool/sms/outgoing/sensor_offline.txt", mode='w') as f:
@@ -82,6 +85,8 @@ while True:
             #update db
             cur.execute('update sensor set status = \'online\' where sensorID = ' + str(sensor))
 
+            if "sensor_offline.txt" in os.listdir("/var/spool/smstools/outgoing") or "sensor_offline.txt" in os.listdir("/var/spool/smstools/checked"):
+                time.sleep(20)
             #sms versenden
             with open("/var/spool/sms/outgoing/sensor_offline.txt", mode='w') as f:
                 cur.execute('select sensorPosition from sensor where sensorID = ' + str(sensor))
@@ -89,19 +94,24 @@ while True:
                 sensorPosition = sensorPosition[0][0]
                 print(To + "\nSensor " + sensorPosition + ": wieder online", file=f)
 
-    cur.execute('select pk_sensorID, status from sensor;')
+    logging.info(str(sens))
+    cur.execute('select sensorID, status from sensor;')
     results = cur.fetchall()
     for i in results:
         sensor = i[0]
-        if sensor not in sens and result[1] == 'online':
-            #update db
-            cur.execute('update sensor set status = \'offline\' where sensorID = ' + str(sensor))
-
+        logging.info(sensor)
+        logging.info(str(i[1]))
+        if sensor not in sens and i[1] == 'online':
+            if "sensor_offline.txt" in os.listdir("/var/spool/sms/outgoing") or "sensor_offline.txt" in os.listdir("/var/spool/sms/checked"):
+                time.sleep(20)
             # sms versenden
             with open("/var/spool/sms/outgoing/sensor_offline.txt", mode='w') as f:
                 cur.execute('select sensorPosition from sensor where sensorID = ' + str(sensor))
                 sensorPosition = cur.fetchall()
                 sensorPosition = sensorPosition[0][0]
                 print(To + "\nSensor " + sensorPosition + ": keine Messungen mehr", file=f)
-    logging.info("fertig")
+
+            #update db
+            cur.execute('update sensor set status = \'offline\' where sensorID = ' + str(sensor))
     time.sleep(10)
+    logging.info("fertig")
