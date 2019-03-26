@@ -16,7 +16,7 @@ rootLogger.addHandler(fileHandler)
 rootLogger.addHandler(console)
 rootLogger.setLevel(logging.INFO)
 
-sql = "select name from pk_systemID where ip = '%s';" % (local)
+sql = "select systemID from messsystem where ip = '%s';" % (local)
 while True:
     try:
         db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
@@ -25,18 +25,20 @@ while True:
         logging.info("Connected to database")
         cursor.execute(sql)
         systemID = cursor.fetchone()[0]
-        cursor.execute(f"select IP_Adresse from server join rack on fk_RackNr_int = pk_RackNr_int join messsystem on fk_systemID = pk_systemID where pk_systemID = {systemID};")
+        cursor.execute(f"select IP_Adresse from server join rack on fk_RackNr_int = pk_RackNr_int join messsystem on fk_systemID = systemID where systemID = {systemID};")
         ips = cursor.fetchall()
         for ip in ips:
             ip = ip[0]
-            response = subprocess.Popen(["ping", "-c", "4", ip], stdout=subprocess.PIPE,
-                                        universal_newlines=True).communicate()[0].split['\n']
+            response_tup = subprocess.Popen(["ping", "-c", "4", ip], stdout=subprocess.PIPE,
+                                        universal_newlines=True)
+            response = list(response_tup.communicate())
+            response = response[0].split("\n")
             isOnline = False
             for line in response:
                 if line.startswith("64 bytes from " + ip):
                     isOnline = True
                     break
-            cursor.execute(f"UPDATE server SET connectivity = {isOnline} where IP_Adresse = {ip};")
+            cursor.execute(f"UPDATE server SET connectivity = {isOnline} where IP_Adresse = '{ip}';")
         db.close()
     except Exception as e:
         logging.error(e)

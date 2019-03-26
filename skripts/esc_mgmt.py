@@ -70,6 +70,9 @@ smokeSens = []
 waterSens = []
 humSens = []
 
+up = "\nTemperaturüberwachung " + systemname + " Notfallsms:\n "
+shutdown_head = "\nTemperaturüberwachung " + systemname + " Shutdownanfrage:\n "
+
 while True:
     silenced = []
     To = ""
@@ -102,13 +105,6 @@ while True:
                 max_rauch = value
                 logging.info("max_smoke: " + str(max_rauch))
 
-    for i in rec:
-        if i not in silenced:
-            To = To + f"To: {i}\n"
-
-    up = To + "\nTemperaturüberwachung " + systemname + " Notfallsms:\n "
-    shutdown_head = To + "\nTemperaturüberwachung " + systemname + " Shutdownanfrage:\n "
-
     try:
         now = datetime.datetime.now()
         nowf = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -118,12 +114,6 @@ while True:
         pastAnswerTime = now - datetime.timedelta(hours=4)
         tm = now + datetime.timedelta(days=1)
         yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-        if To == "":
-            time.sleep(10)
-            logging.info("muted")
-            continue
-        sms = up
-        title = ""
         logging.info("try connecting to db")
         try:
             connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
@@ -137,11 +127,9 @@ while True:
             logging.error(e)
             continue
 
-        if not len(os.listdir(path + '/checked/')) == 0:
-            continue
         #cur.execute(
          #   "select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorName from web where zeit > '" + past + "' group by sensorName;")
-        cur.execute("select sensorName from sensor;")
+        cur.execute("select sensorName from sensor where status = 'online';")
         results = cur.fetchall()
         temp = dict()
         hum = dict()
@@ -262,16 +250,26 @@ while True:
             isEmergency = False
             message += 'Der Normalzustand ist wieder eingetreten.'
             try:
-                save_to_messages_db(cur, nowf, 1, 'Entwarnung', message)
-                with open("/var/spool/sms/outgoing/all-clear-sms.txt", mode='w') as f:
-                    print(message, file=f)
-                logging.info("Entwarnungssms versendet")
+                for i in rec:
+                    if i in silenced:
+                        continue
+                    while "all-clear-sms.txt" in os.listdir("/var/spool/sms/outgoing") or "all-clear-sms.txt" in \
+                            os.listdir("/var/spool/sms/checked"):
+                        continue
+                    sms = f"To: {i}\n" + message
+                    save_to_messages_db(cur, nowf, 1, 'Entwarnung', sms)
+                    with open("/var/spool/sms/outgoing/all-clear-sms.txt", mode='w') as f:
+                        print(sms, file=f)
+                    logging.info("Entwarnungssms versendet")
                 continue
             except Exception as e:
                 logging.error(e)
                 isEmergency = True
                 continue
 
+        if len(tempSens) == 0 and len(smokeSens) == 0 and len(waterSens) == 0 and len(humSens) == 0:
+            logging.info('No emergency')
+            continue
         #Emergencies in Message schreiben
         if len(tempSens) > 0:
             message += "Temperatur Emergencies:\n"
@@ -326,10 +324,21 @@ while True:
                     logging.info("Notfallsms vor weniger als 30 Min gesendet")
                     message = ''
             if message != '':
-                save_to_messages_db(cur, nowf, 1, 'Notfallsms', message)
-                with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
-                    print(message, file=f)
-                logging.info("Notfallsms versendet")
+                if "emergency-sms.txt" not in os.listdir(
+                        "/var/spool/sms/outgoing") and "emergency-sms.txt" not in os.listdir(
+                        "/var/spool/sms/checked"):
+                    for i in rec:
+                        if i in silenced:
+                            continue
+                        while "emergency-sms.txt" in os.listdir("/var/spool/sms/outgoing") or "emergency-sms.txt" in \
+                                os.listdir("/var/spool/sms/checked"):
+                            continue
+                        sms = f"To: {i}\n" + message
+
+                        save_to_messages_db(cur, nowf, 1, 'Notfallsms', sms)
+                        with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
+                            print(sms, file=f)
+                        logging.info("Notfallsms versendet")
 
         except Exception as e:
             logging.error(e)
@@ -375,19 +384,13 @@ while True:
             elif number > 0:
                 mcursor.execute(f'select answer, from message where isOpen = true')
                 answer = mcursor.fetchone()
-                if answer[0]:
+                if answer[0] or (shutdown_time != None and shutdown_time < pastAnswerTime):
                     for rack_id in rack_ids:
                         shutdown_Rack(rack_id)
                         logging.info(f"Rack {rack_id} abgeschaltet")
                     mcursor.execute(f'update message set isOpen = False where isOpen = True')
-            elif shutdown_time != None and shutdown_time < pastAnswerTime:
-                for rack_id in rack_ids:
-                    shutdown_Rack(rack_id)
-                    logging.info(f"Rack {rack_id} abgeschaltet")
-                shutdown_time = None
+                    shutdown_time = None
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)
     connection.close()
-#Notfall antwort mit Datenbank
-#Nur sensoren die online sind

@@ -123,7 +123,7 @@ if __name__ == '__main__':
 				for i in rec:
 					if i in silenced:
 						continue
-					while len(os.listdir(path + '/checked/')) != 0:
+					while "alive.txt" in os.listdir(path + '/checked/') or "alive.txt" in os.listdir(path + '/outgoing/'):
 						continue
 					try:
 						To = "To: " + str(i) + "\n"
@@ -152,65 +152,65 @@ if __name__ == '__main__':
 					except Exception as e:
 						logging.error(e)
 						continue
-					os.system("touch -d " + tm.strftime("%Y%m%d") + " /home/pi/alive.txt")
-					cur.execute("delete from messung where zeit < '" + yes + "';")
-					logging.info("daily delete")
-					connection.close()
-					time.sleep(20)
-					continue
-					"""
-					cur.execute(
-						"select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorName from web where zeit > '" + past + "' group by sensorName;")
-					sms = up
-					title = ""
-					results = cur.fetchall()
-					msgs = dict()
-					for result in results:
-						try:
-							if result[0] == None and result[1] == None and result[2] == None:
-								if float(result[3]) > max_rauch:
-									msgs[result[4] + "r"] = "Die Werte an Sensor " + result[
-										4] + " sind außerhalb des Normalbereichs: " + str(result[3]) + "\n"
-								continue
-							elif result[0] == None and result[1] == None:
-								if float(result[2]) > 0:
-									msgs[result[4] + "w"] = "Die Werte an Sensor " + result[
-										4] + " sind außerhalb des Normalbereichs: " + str(result[2]) + "\n"
-								continue
-							elif result[1] == None:
-								if float(result[0]) > max_temp:
-									msgs[result[4] + "t"] = "Die Werte an Sensor " + result[
-										4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C\n"
-								continue
-							else:
-								if float(result[0]) > max_temp and float(result[1]) > max_hum:
-									msgs[result[4] + "tf"] = "Die Werte an Sensor " + result[
-										4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C/" + str(
-										result[1]) + "%\n"
-								continue
-						except Exception as e:
-							logging.error(e)
-					files = os.listdir(path + "/sent/")
-					for name, message in msgs.items():
-						for file in files:
-							for n in str(file)[:-4].split("-"):
-								if name == n and (
-										datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall):
-									logging.info("")
-									message = ""
-									name = ""
-						sms += message
-						if message != "":
-							title += name + "-"
-						logging.info("added " + message + "to SMS")
-					if not title == "":
-						logging.info("title of sms is: " + title)
-						save_to_messages_db(cur, nowf, 1, title[:-1], sms)
-						with open("/var/spool/sms/outgoing/" + title[:-1] + ".txt", mode='w') as f:
-							print(sms, file=f)
-					connection.close()
-					time.sleep(30)
-					"""
+				os.system("touch -d " + tm.strftime("%Y%m%d") + " /home/pi/alive.txt")
+				cur.execute("delete from messung where zeit < '" + yes + "';")
+				logging.info("daily delete")
+				connection.close()
+				time.sleep(20)
+				continue
+				"""
+				cur.execute(
+					"select avg(temp) as temp , avg(feucht) as feucht,  avg(wasser) as wasser , avg(rauch) as rauch, sensorName from web where zeit > '" + past + "' group by sensorName;")
+				sms = up
+				title = ""
+				results = cur.fetchall()
+				msgs = dict()
+				for result in results:
+					try:
+						if result[0] == None and result[1] == None and result[2] == None:
+							if float(result[3]) > max_rauch:
+								msgs[result[4] + "r"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[3]) + "\n"
+							continue
+						elif result[0] == None and result[1] == None:
+							if float(result[2]) > 0:
+								msgs[result[4] + "w"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[2]) + "\n"
+							continue
+						elif result[1] == None:
+							if float(result[0]) > max_temp:
+								msgs[result[4] + "t"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C\n"
+							continue
+						else:
+							if float(result[0]) > max_temp and float(result[1]) > max_hum:
+								msgs[result[4] + "tf"] = "Die Werte an Sensor " + result[
+									4] + " sind außerhalb des Normalbereichs: " + str(result[0]) + "°C/" + str(
+									result[1]) + "%\n"
+							continue
+					except Exception as e:
+						logging.error(e)
+				files = os.listdir(path + "/sent/")
+				for name, message in msgs.items():
+					for file in files:
+						for n in str(file)[:-4].split("-"):
+							if name == n and (
+									datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall):
+								logging.info("")
+								message = ""
+								name = ""
+					sms += message
+					if message != "":
+						title += name + "-"
+					logging.info("added " + message + "to SMS")
+				if not title == "":
+					logging.info("title of sms is: " + title)
+					save_to_messages_db(cur, nowf, 1, title[:-1], sms)
+					with open("/var/spool/sms/outgoing/" + title[:-1] + ".txt", mode='w') as f:
+						print(sms, file=f)
+				connection.close()
+				time.sleep(30)
+				"""
 		except Exception as outer:
 			logging.error(outer)
 			connection.close()
