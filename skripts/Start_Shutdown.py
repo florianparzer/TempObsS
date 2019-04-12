@@ -133,7 +133,7 @@ def getVMsOfHost(ip):
         except Exception as e:
             logging.error(e)
 
-        vmData = dict
+        vmData = dict()
         ssh = pxssh.pxssh()
         ssh.login(ip, credentials[0], credentials[1])
         ssh.prompt()
@@ -160,7 +160,7 @@ def getAllVMs(ips):
     :return: ein Dictionary mit den IP Adressen als Key und den WorldIDs als Value
     """
     try:
-        vms = dict
+        vms = dict()
         for ip in ips:
             vmData = getVMsOfHost(ip)
             for i in vmData:
@@ -186,34 +186,32 @@ def shutdownVM_SSH(vmData):
             cursor = db.cursor()
             logging.info("Connected to database")
             cursor.execute(f'select benutzername, passwort, betriebssystem from VM where pk_IP_Adresse = "{vmip}"')
+            for select in cursor.fetchall():
+                try:
+                    if select[2] == 'vCenter':
+                        vCenterID = id
+                        vCenterIP = vmip
+                        esxi = hostIP
+                        continue
+                    ssh = pxssh.pxssh()
+                    if select[2] == 'Windows':
+                        ssh.PROMPT = r'C:\\Users\\.+>'
+                        ssh.login(vmip, select[0], select[1], auto_prompt_reset=False)
+                        logging.info(f"Mit VM[{vmip}] verbunden")
+                        ssh.prompt()
+                        ssh.sendline('shutdown -s -t 0')
+                        ssh.prompt()
+                    elif select[2] == 'Linux':
+                        ssh.PROMPT = r'\[.+\]#'
+                        ssh.login(vmip, select[0], select[1], auto_prompt_reset=False, login_timeout=30)
+                        logging.info(f"Mit VM[{vmip}] verbunden")
+                        ssh.prompt()
+                        ssh.sendline('shutdown now')
+                except pxssh.ExceptionPxssh as e:
+                    logging.error(e)
         except Exception as e:
             logging.error(e)
             continue
-        try:
-            for select in cursor.fetchall():
-                if select[2] == 'vCenter':
-                    vCenterID = id
-                    vCenterIP = vmip
-                    esxi = hostIP
-                    continue
-                ssh = pxssh.pxssh()
-                if select[2] == 'Windows':
-                    ssh.PROMPT = '.+>'
-                    ssh.login(vmip, select[0], select[1], auto_prompt_reset=False)
-                    logging.info(f"Mit VM[{vmip}] verbunden")
-                    ssh.prompt()
-                    ssh.sendline('shutdown -s -t 0')
-                    ssh.prompt()
-                elif select[2] == 'Linux':
-                    ssh.PROMPT = '\\[.+\\]#'
-                    ssh.login(vmip, select[0], select[1], auto_prompt_reset=False)
-                    logging.info(f"Mit VM[{vmip}] verbunden")
-                    ssh.prompt()
-                    ssh.sendline('shutdown now')
-                    ssh.prompt()
-            ssh.logout()
-        except pxssh.ExceptionPxssh as e:
-            logging.error(e)
     return (vCenterID, vCenterIP, esxi)
 
 
@@ -366,13 +364,14 @@ def shutdown_Rack(rack):
     time.sleep(vmTimer)
     shutdownVM_Kill(ips, vCenterIP, 'force')
     time.sleep(vmTimer)
-    shutdownvCenter_SSH(vCenterIP)
-    time.sleep(vCenterTimer)
-    shutdownvCenter_Kill(esxi, vCenterID, 'soft')
-    time.sleep(vCenterTimer)
-    shutdownvCenter_Kill(esxi, vCenterID, 'hard')
-    time.sleep(vCenterTimer)
-    shutdownvCenter_Kill(esxi, vCenterID, 'force')
-    time.sleep(vCenterTimer)
+    if vCenterIP != None:
+        shutdownvCenter_SSH(vCenterIP)
+        time.sleep(vCenterTimer)
+        shutdownvCenter_Kill(esxi, vCenterID, 'soft')
+        time.sleep(vCenterTimer)
+        shutdownvCenter_Kill(esxi, vCenterID, 'hard')
+        time.sleep(vCenterTimer)
+        shutdownvCenter_Kill(esxi, vCenterID, 'force')
+        time.sleep(vCenterTimer)
     for i in ips:
         shutdownServer(i)

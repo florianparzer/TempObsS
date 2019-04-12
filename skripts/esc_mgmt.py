@@ -23,7 +23,7 @@ rootLogger.setLevel(logging.INFO)
 
 max_temp_sms = 35.0
 max_temp_shutdown = 45.0
-max_temp_emergency = 50.0
+max_temp_emergency = 60.0
 max_hum = 70.0
 interval = 30
 max_rauch = 10
