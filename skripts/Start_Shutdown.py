@@ -89,7 +89,7 @@ def getVMWorldIDs(ip):
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}"')
+            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
             credentials = cursor.fetchone()
             db.close()
         except Exception as e:
@@ -127,7 +127,7 @@ def getVMsOfHost(ip):
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}"')
+            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
             credentials = cursor.fetchone()
             db.close()
         except Exception as e:
@@ -185,7 +185,7 @@ def shutdownVM_SSH(vmData):
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'select benutzername, passwort, betriebssystem from VM where pk_IP_Adresse = "{vmip}"')
+            cursor.execute(f'select benutzername, passwort, betriebssystem from VM where pk_IP_Adresse = "{vmip}";')
             for select in cursor.fetchall():
                 try:
                     if select[2] == 'vCenter':
@@ -207,6 +207,7 @@ def shutdownVM_SSH(vmData):
                         logging.info(f"Mit VM[{vmip}] verbunden")
                         ssh.prompt()
                         ssh.sendline('shutdown now')
+                    logging.info(f'VM {vmip} is down')
                 except pxssh.ExceptionPxssh as e:
                     logging.error(e)
         except Exception as e:
@@ -228,11 +229,12 @@ def shutdownVM_Kill(ips, vCenterIP, type):
                 db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
                 cursor = db.cursor()
                 logging.info("Connected to database")
-                cursor.execute(f'select benutzername, passwort from server where IP_Adresse = {ip}')
+                cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
                 user = cursor.fetchone()[0]
                 password = cursor.fetchone()[1]
             except Exception as e:
                 logging.error(e)
+                continue
 
             ssh = pxssh.pxssh()
             ssh.login(ip, user, password)
@@ -259,7 +261,7 @@ def shutdownvCenter_SSH(ip):
                              db='serverraum_temperaturueberwachung', autocommit=True)
         cursor = db.cursor()
         logging.info("Connected to database")
-        cursor.execute(f'select benutzername, passwort from server where IP_Adresse = {ip}')
+        cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
         user = cursor.fetchone()[0]
         password = cursor.fetchone()[1]
     except Exception as e:
@@ -287,9 +289,10 @@ def shutdownvCenter_Kill(ip, vCenterID, type):
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = {ip}')
+            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
             user = cursor.fetchone()[0]
             password = cursor.fetchone()[1]
+            db.close()
         except Exception as e:
             logging.error(e)
 
@@ -322,14 +325,15 @@ def shutdownServer(ip):
             db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='serverraum_temperaturueberwachung', autocommit=True)
             cursor = db.cursor()
             logging.info("Connected to database")
-            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = {ip}')
+            cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
             user = cursor.fetchone()[0]
             password = cursor.fetchone()[1]
+            db.close()
         except Exception as e:
             logging.error(e)
 
         ssh = pxssh.pxssh()
-        ssh.login(ip, user, password)
+        ssh.login(ip, user, password)#Passwort nicht definiert ?!
         logging.info(f"Mit ESXi[{ip}] verbunden")
         ssh.sendline('poweroff')
         ssh.logout()
@@ -346,10 +350,11 @@ def shutdown_Rack(rack):
         db = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',db='serverraum_temperaturueberwachung', autocommit=True)
         cursor = db.cursor()
         logging.info("Connected to database")
-        cursor.execute(f'select IP_Adresse from server where fk_RackNr_int = {rack} and connectivity = TRUE')
+        cursor.execute(f'select IP_Adresse from server where fk_RackNr_int = {rack} and connectivity = TRUE;')
         ips = []
         for ip in cursor.fetchall():
             ips.append(ip[0])
+        db.close()
     except Exception as e:
         logging.error(e)
 
