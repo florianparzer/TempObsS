@@ -40,6 +40,7 @@ while True:
                     break
             cursor.execute(f"UPDATE server SET connectivity = {isOnline} where IP_Adresse = '{ip}';")
         db.close()
+        time.sleep(60)
     except Exception as e:
         logging.error(e)
         time.sleep(60)

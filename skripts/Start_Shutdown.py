@@ -230,14 +230,13 @@ def shutdownVM_Kill(ips, vCenterIP, type):
                 cursor = db.cursor()
                 logging.info("Connected to database")
                 cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
-                user = cursor.fetchone()[0]
-                password = cursor.fetchone()[1]
+                credentials = cursor.fetchone()
             except Exception as e:
                 logging.error(e)
                 continue
 
             ssh = pxssh.pxssh()
-            ssh.login(ip, user, password)
+            ssh.login(ip, credentials[0], credentials[1])
             logging.info(f"Mit ESXi[{ip}] verbunden")
             vmData = getVMsOfHost(ip)
             for vmip in vmData:
@@ -262,13 +261,12 @@ def shutdownvCenter_SSH(ip):
         cursor = db.cursor()
         logging.info("Connected to database")
         cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
-        user = cursor.fetchone()[0]
-        password = cursor.fetchone()[1]
+        credentials = cursor.fetchone()
     except Exception as e:
         logging.error(e)
     try:
         ssh = pxssh.pxssh()
-        ssh.login(ip, user, password)
+        ssh.login(ip, credentials[0], credentials[1])
         logging.info(f"Mit vCenter Server[{ip}] verbunden")
         ssh.sendline('shutdown -s -t 0')
         ssh.prompt()
@@ -290,14 +288,13 @@ def shutdownvCenter_Kill(ip, vCenterID, type):
             cursor = db.cursor()
             logging.info("Connected to database")
             cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
-            user = cursor.fetchone()[0]
-            password = cursor.fetchone()[1]
+            credentials = cursor.fetchone()
             db.close()
         except Exception as e:
             logging.error(e)
 
         ssh = pxssh.pxssh()
-        ssh.login(ip, user, password)
+        ssh.login(ip, credentials[0], credentials[1])
         logging.info(f"Mit ESXi[{ip}] verbunden")
         isRunning = False
         for data in getVMsOfHost(ip):
@@ -326,14 +323,13 @@ def shutdownServer(ip):
             cursor = db.cursor()
             logging.info("Connected to database")
             cursor.execute(f'select benutzername, passwort from server where IP_Adresse = "{ip}";')
-            user = cursor.fetchone()[0]
-            password = cursor.fetchone()[1]
+            credentials = cursor.fetchone()
             db.close()
         except Exception as e:
             logging.error(e)
 
         ssh = pxssh.pxssh()
-        ssh.login(ip, user, password)#Passwort nicht definiert ?!
+        ssh.login(ip, credentials[0], credentials[1])#Passwort nicht definiert ?!
         logging.info(f"Mit ESXi[{ip}] verbunden")
         ssh.sendline('poweroff')
         ssh.logout()

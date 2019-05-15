@@ -34,6 +34,8 @@ rec = []
 try:
     with open("/etc/smsd/recievers.list", mode='r') as recievers:
         for reciever in recievers:
+            if reciever.startswith("#"):
+                continue
             logging.info("Adding reciever: " + reciever)
             rec.append(reciever)
 except Exception as tel:
@@ -109,7 +111,7 @@ while True:
         now = datetime.datetime.now()
         nowf = now.strftime("%Y-%m-%d %H:%M:%S")
         past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
-        pastIntervall = now - datetime.timedelta(minutes=interval)
+        pastInterval = now - datetime.timedelta(minutes=interval)
         shutdown_time = None
         pastAnswerTime = now - datetime.timedelta(hours=4)
         tm = now + datetime.timedelta(days=1)
@@ -144,7 +146,7 @@ while True:
         isHumEmergency = True
         isNewEmergency = False
         message = up
-        isShutdownPhase = True
+        isShutdownPhase = False
 
         #Daten der letzen 5 Min auslesen und nach Kategorie gruppieren
         for result in results:
@@ -174,6 +176,8 @@ while True:
                         dataHum.append([vResult[1]])
                         isTemp = True
                         isHum = True
+                if len(data) == 0:
+                    continue
                 if isSmoke:
                     smoke[sens] = data
                 elif isWater:
@@ -257,7 +261,7 @@ while True:
                             os.listdir("/var/spool/sms/checked"):
                         continue
                     sms = f"To: {i}\n" + message
-                    save_to_messages_db(cur, nowf, 1, 'Entwarnung', sms)
+                    save_to_messages_db(cur, nowf, 1, 'Entwarnung', sms, False)
                     with open("/var/spool/sms/outgoing/all-clear-sms.txt", mode='w') as f:
                         print(sms, file=f)
                     logging.info("Entwarnungssms versendet")
@@ -320,7 +324,7 @@ while True:
             files = os.listdir(path + "/sent/")
             for file in files:
                 if str(file) == 'emergency-sms.txt' and (
-                        datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall) and not isNewEmergency:
+                        datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastInterval) and not isNewEmergency:
                     logging.info("Notfallsms vor weniger als 30 Min gesendet")
                     message = ''
             if message != '':
@@ -335,7 +339,7 @@ while True:
                             continue
                         sms = f"To: {i}\n" + message
 
-                        save_to_messages_db(cur, nowf, 1, 'Notfallsms', sms)
+                        save_to_messages_db(cur, nowf, 1, 'Notfallsms', sms, False)
                         with open("/var/spool/sms/outgoing/emergency-sms.txt", mode='w') as f:
                             print(sms, file=f)
                         logging.info("Notfallsms versendet")
@@ -344,14 +348,25 @@ while True:
             logging.error(e)
 
         # Phase 2
+        now = datetime.datetime.now()
+        nowf = now.strftime("%Y-%m-%d %H:%M:%S")
+        past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
+        pastInterval = now - datetime.timedelta(minutes=interval)
+        shutdown_time = None
+        pastAnswerTime = now - datetime.timedelta(hours=4)
+        tm = now + datetime.timedelta(days=1)
+        yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+
         try:
             cur.execute("select sensorName from sensor;")
             results = cur.fetchall()
             for result in results:
-                isShutdownPhase = True
                 cur.execute(
-                       f"select temp from web where zeit > '{past}' and sensorName = {result[0]};")
+                       f"select temp from web where zeit > '{past}' and sensorName = '{result[0]}' and temp is not Null;")
                 temperatures = cur.fetchall()
+                if len(temperatures) == 0:
+                    continue
+                isShutdownPhase = True
                 for temperature in temperatures:
                     if temperature[0] < max_temp_shutdown:
                         isShutdownPhase = False
@@ -361,34 +376,43 @@ while True:
 
         except Exception as e:
             logging.error(e)
+            isShutdownPhase = False
+            continue
 
         if isShutdownPhase:
-            mcursor.execute(f'select count(isOpen), from message where isOpen = true')
+            mcursor.execute(f'select count(isOpen) from message where isOpen = true;')
             number = mcursor.fetchone()
             if number[0] == 0 and shutdown_time == None:
-                cur.execute(f'select rackNr_int, rackNr_ext from rack '
+                cur.execute(f'select pk_rackNr_int, rackNr_ext from rack '
                             + f'where priority = (select min(priority) from rack '
-                            + f'where rackNr_int in (select distinct rackNr_int form server where connectivity = true));')
+                            + f'where pk_rackNr_int in (select distinct pk_rackNr_int from server where connectivity = true));')
                 racks = cur.fetchall()
                 rack_ids = []
                 shutdown_message = shutdown_head + 'Sollen die Racks '
                 for rack in racks:
                     rack_ids.append(rack[0])
                     shutdown_message += f'{rack[1]}, '
-                shutdown_message = shutdown_message[0,-2] + ' abgeschaltet werden?'
-                save_to_messages_db(cur, nowf, 1, 'Shutdown_Message', shutdown_message)
-                with open("/var/spool/sms/outgoing/shutdwon-message.txt", mode='w') as f:
-                    print(message, file=f)
-                logging.info("Shutdown_Message versendet")
+                shutdown_message = shutdown_message[0: -2] + ' abgeschaltet werden?[ja/nein]'
+                for i in rec:
+                    if i in silenced:
+                        continue
+                    while "shutdown-message.txt" in os.listdir("/var/spool/sms/outgoing") or "shutdown-message.txt" in \
+                            os.listdir("/var/spool/sms/checked"):
+                        continue
+                    shutdown_message = f"To: {i}\n\n{shutdown_message}"
+                    save_to_messages_db(cur, nowf, 1, 'Shutdown_Message', shutdown_message, True)
+                    with open("/var/spool/sms/outgoing/shutdown-message.txt", mode='w') as f:
+                        print(shutdown_message, file=f)
+                    logging.info("Shutdown_Message versendet")
                 shutdown_time = datetime.datetime.now()
-            elif number > 0:
-                mcursor.execute(f'select answer, from message where isOpen = true')
+            elif number[0] > 0:
+                mcursor.execute(f'select answer from message where isOpen = true;')
                 answer = mcursor.fetchone()
                 if answer[0] or (shutdown_time != None and shutdown_time < pastAnswerTime):
                     for rack_id in rack_ids:
                         shutdown_Rack(rack_id)
                         logging.info(f"Rack {rack_id} abgeschaltet")
-                    mcursor.execute(f'update message set isOpen = False where isOpen = True')
+                    mcursor.execute(f'update message set isOpen = False where isOpen = True;')
                     shutdown_time = None
         time.sleep(30)
     except Exception as outer:

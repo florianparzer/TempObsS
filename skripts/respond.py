@@ -32,8 +32,6 @@ recievers = []
 shutdown = False
 
 
-def setShutdown(a: bool):
-    shutdown = a
 
 
 # general path
@@ -56,6 +54,17 @@ try:
     systemname = cursor.fetchone()[0]
     logging.info("SystemName is: " + systemname)
     db.close()
+except Exception as e:
+    logging.error(e)
+    sys.exit()
+
+try:
+    connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
+                                 db='serverraum_temperaturueberwachung', autocommit=True)
+    cur = connection.cursor()
+    mdb = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='messages',
+                          autocommit=True)
+    mcursor = mdb.cursor()
 except Exception as e:
     logging.error(e)
     sys.exit()
@@ -294,13 +303,17 @@ while True:
                             with open("/var/spool/sms/outgoing/help.txt", mode="w") as f:
                                 print(up + help, file=f)
                             continue
-                        elif re.match(r'ja',line,re.IGNORECASE) and shutdown:
+                        elif re.match(r'ja',line,re.IGNORECASE):
                             '''
                             if len(line.strip().split(" ")) == 2:
                                 if line.strip().split(" ")[1].strip() == "schoeni12":
 
                             else:
                             '''
+                            mcursor.execute('select count(isOpen) from message where isOpen = true;')
+                            number = mcursor.fetchone()
+                            if number[0] == 0:
+                                continue
                             try:
                                 connection = pymysql.connect(host='localhost', user='webuser',
                                                              password='La4R2uyME78hAfn9I1pH',
@@ -315,7 +328,11 @@ while True:
                                 logging.info("couldnt connect to db")
 
 
-                        elif re.match(r'nein',line,re.IGNORECASE) and shutdown:
+                        elif re.match(r'nein',line,re.IGNORECASE):
+                            mcursor.execute('select count(isOpen) from message where isOpen = true;')
+                            number = mcursor.fetchone()
+                            if number[0] == 0:
+                                continue
                             try:
                                 connection = pymysql.connect(host='localhost', user='webuser',
                                                              password='La4R2uyME78hAfn9I1pH',

@@ -8,7 +8,7 @@ import time
 import sys
 import socket
 
-def save_to_messages_db(cur, nowf, type, title, sms):
+def save_to_messages_db(cur, nowf, type, title, sms, isOpen):
 	"""
 	Saves outgoing messages to the messages db
 	:param cur: the cursor on serverraum_temperaturueberwachung
@@ -25,7 +25,7 @@ def save_to_messages_db(cur, nowf, type, title, sms):
 				logging.info("Saving sms in: " +system[0])
 				mdb = pymysql.connect(host=system[0], user='webuser', password='La4R2uyME78hAfn9I1pH',db='messages',autocommit=True)
 				mcursor = mdb.cursor()
-				sql = "insert into message (zeit, typ, betreff, text) values ('%s', %d, '%s', '%s');" % (str(nowf),type,title, sms)
+				sql = "insert into message (zeit, typ, betreff, text, isopen) values ('%s', %d, '%s', '%s', '%b');" % (str(nowf),type,title, sms, isOpen)
 				logging.debug(sql)
 				mcursor.execute(sql)
 				mdb.close()
@@ -147,7 +147,7 @@ if __name__ == '__main__':
 								else:
 									print(result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) + " %\n", file=f)
 									da = da + result[4] + ": " + str(result[0]) + "°C / " + str(result[1]) + " %\n"
-						save_to_messages_db(cur, nowf, 2, "alive", da)
+						save_to_messages_db(cur, nowf, 2, "alive", da, False)
 						logging.info("daily SMS sent")
 					except Exception as e:
 						logging.error(e)
@@ -195,7 +195,7 @@ if __name__ == '__main__':
 					for file in files:
 						for n in str(file)[:-4].split("-"):
 							if name == n and (
-									datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastIntervall):
+									datetime.datetime.fromtimestamp(os.stat(path + "/sent/" + str(file)).st_mtime) > pastInterval):
 								logging.info("")
 								message = ""
 								name = ""
