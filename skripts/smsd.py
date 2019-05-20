@@ -25,7 +25,7 @@ def save_to_messages_db(cur, nowf, type, title, sms, isOpen):
 				logging.info("Saving sms in: " +system[0])
 				mdb = pymysql.connect(host=system[0], user='webuser', password='La4R2uyME78hAfn9I1pH',db='messages',autocommit=True)
 				mcursor = mdb.cursor()
-				sql = "insert into message (zeit, typ, betreff, text, isopen) values ('%s', %d, '%s', '%s', '%b');" % (str(nowf),type,title, sms, isOpen)
+				sql = "insert into message (zeit, typ, betreff, text, isopen) values ('%s', %d, '%s', '%s', %d);" % (str(nowf), type, title, sms, isOpen)
 				logging.debug(sql)
 				mcursor.execute(sql)
 				mdb.close()

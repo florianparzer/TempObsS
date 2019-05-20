@@ -26,6 +26,7 @@ max_temp_shutdown = 45.0
 max_temp_emergency = 60.0
 max_hum = 70.0
 interval = 30
+shutdown_interval = 15
 max_rauch = 10
 
 #Get Receiver
@@ -71,6 +72,8 @@ tempSens = []
 smokeSens = []
 waterSens = []
 humSens = []
+rack_ids = []
+shutdown_time = None
 
 up = "\nTemperaturüberwachung " + systemname + " Notfallsms:\n "
 shutdown_head = "\nTemperaturüberwachung " + systemname + " Shutdownanfrage:\n "
@@ -112,7 +115,8 @@ while True:
         nowf = now.strftime("%Y-%m-%d %H:%M:%S")
         past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
         pastInterval = now - datetime.timedelta(minutes=interval)
-        shutdown_time = None
+        pastShutdown = now - datetime.timedelta(minutes=shutdown_interval)
+        shutdownMessage_time = None
         pastAnswerTime = now - datetime.timedelta(hours=4)
         tm = now + datetime.timedelta(days=1)
         yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
@@ -352,7 +356,7 @@ while True:
         nowf = now.strftime("%Y-%m-%d %H:%M:%S")
         past = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
         pastInterval = now - datetime.timedelta(minutes=interval)
-        shutdown_time = None
+        shutdownMessage_time = None
         pastAnswerTime = now - datetime.timedelta(hours=4)
         tm = now + datetime.timedelta(days=1)
         yes = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
@@ -382,7 +386,7 @@ while True:
         if isShutdownPhase:
             mcursor.execute(f'select count(isOpen) from message where isOpen = true;')
             number = mcursor.fetchone()
-            if number[0] == 0 and shutdown_time == None:
+            if number[0] == 0 and shutdownMessage_time == None and (shutdown_time == None or shutdown_time < pastShutdown):
                 cur.execute(f'select pk_rackNr_int, rackNr_ext from rack '
                             + f'where priority = (select min(priority) from rack '
                             + f'where pk_rackNr_int in (select distinct pk_rackNr_int from server where connectivity = true));')
@@ -404,16 +408,21 @@ while True:
                     with open("/var/spool/sms/outgoing/shutdown-message.txt", mode='w') as f:
                         print(shutdown_message, file=f)
                     logging.info("Shutdown_Message versendet")
-                shutdown_time = datetime.datetime.now()
+                shutdownMessage_time = datetime.datetime.now()
             elif number[0] > 0:
+                logging.info("Shutdown-Message bereits versendet")
                 mcursor.execute(f'select answer from message where isOpen = true;')
                 answer = mcursor.fetchone()
-                if answer[0] or (shutdown_time != None and shutdown_time < pastAnswerTime):
+                if answer[0] or (shutdownMessage_time != None and shutdownMessage_time < pastAnswerTime):
+                    logging.info("Positive Antwort erhalten oder Interval abgelaufen")
                     for rack_id in rack_ids:
                         shutdown_Rack(rack_id)
                         logging.info(f"Rack {rack_id} abgeschaltet")
+                        shutdown_time = datetime.datetime.now()
                     mcursor.execute(f'update message set isOpen = False where isOpen = True;')
-                    shutdown_time = None
+                    shutdownMessage_time = None
+            else:
+                logging.info(f"Rack vor weniger als {shutdown_interval} Minuten abgeschaltet")
         time.sleep(30)
     except Exception as outer:
         logging.error(outer)

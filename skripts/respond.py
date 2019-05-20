@@ -58,16 +58,7 @@ except Exception as e:
     logging.error(e)
     sys.exit()
 
-try:
-    connection = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH',
-                                 db='serverraum_temperaturueberwachung', autocommit=True)
-    cur = connection.cursor()
-    mdb = pymysql.connect(host='localhost', user='webuser', password='La4R2uyME78hAfn9I1pH', db='messages',
-                          autocommit=True)
-    mcursor = mdb.cursor()
-except Exception as e:
-    logging.error(e)
-    sys.exit()
+
 
 up = "Temperaturüberwachung " + systemname + ":\n"
 # text of the help message
@@ -303,48 +294,55 @@ while True:
                             with open("/var/spool/sms/outgoing/help.txt", mode="w") as f:
                                 print(up + help, file=f)
                             continue
-                        elif re.match(r'ja',line,re.IGNORECASE):
+                        elif re.match(r'ja', line, re.IGNORECASE):
                             '''
                             if len(line.strip().split(" ")) == 2:
                                 if line.strip().split(" ")[1].strip() == "schoeni12":
 
                             else:
                             '''
-                            mcursor.execute('select count(isOpen) from message where isOpen = true;')
-                            number = mcursor.fetchone()
-                            if number[0] == 0:
-                                continue
                             try:
+                                logging.info("Positive Antwort erhalten")
                                 connection = pymysql.connect(host='localhost', user='webuser',
                                                              password='La4R2uyME78hAfn9I1pH',
                                                              db='messages', autocommit=True)
                                 cur = connection.cursor()
+                                cur.execute('select count(isOpen) from message where isOpen = true;')
+                                number = cur.fetchone()
+                                if number[0] == 0:
+                                    logging.info("Keine Antwort erwartet")
+                                    continue
                                 cur.execute(
-                                    "select zeit from message where isopen is True;")
+                                    "select zeit from message where isopen = True;")
                                 answer = cur.fetchall()
-                                cur.execute("update message set answer = True where zeit = " + answer[0][0])
+                                zeit = str(answer[0][0])
+                                cur.execute("update message set answer = True where zeit = \"" + zeit + "\";")
 
-                            except:
-                                logging.info("couldnt connect to db")
+                            except Exception as e:
+                                logging.error(e)
 
 
                         elif re.match(r'nein',line,re.IGNORECASE):
-                            mcursor.execute('select count(isOpen) from message where isOpen = true;')
-                            number = mcursor.fetchone()
-                            if number[0] == 0:
-                                continue
                             try:
+                                logging.info("Negative Antwort erhalten")
                                 connection = pymysql.connect(host='localhost', user='webuser',
                                                              password='La4R2uyME78hAfn9I1pH',
                                                              db='message', autocommit=True)
                                 cur = connection.cursor()
+                                cur.execute('select count(isOpen) from message where isOpen = true;')
+                                number = cur.fetchone()
+                                if number[0] == 0:
+                                    logging.info("Keine Antwort erwartet")
+                                    continue
+
                                 cur.execute(
                                     "select zeit from message where isopen is True;")
                                 answer = cur.fetchall()
-                                cur.execute("update message set isopen = False where zeit = " + answer[0][0] + ";")
+                                zeit = str(answer[0][0])
+                                cur.execute("update message set isopen = False where zeit = \"" + zeit + "\";")
 
-                            except:
-                                logging.info("couldnt connect to db")
+                            except Exception as e:
+                                logging.error(e)
 
 
                 os.system("rm " + path + "/incoming/" + file)
